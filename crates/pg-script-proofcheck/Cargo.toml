@@ -1,0 +1,14 @@
+[package]
+name = "pg-script-proofcheck"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Independent Proof-Carrying Script checker: re-derives HostApiSubset and FuelBounded from the module/policy bytes themselves. A signature says a key holder shipped the claim; only this crate's verdict makes it Accepted."
+
+[dependencies]
+pg-script = { path = "../pg-script" }
+pg-script-policy = { path = "../pg-script-policy" }
+pg-script-verify = { path = "../pg-script-verify" }
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(kani)'] }

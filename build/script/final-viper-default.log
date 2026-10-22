@@ -1,0 +1,13 @@
+PASS serial_driver: obligations verified=True negative-control-refuted=True
+PASS serial_virt_tx: obligations verified=True negative-control-refuted=True
+PASS ethernet_driver: obligations verified=True negative-control-refuted=True
+PASS net_virt_tx: obligations verified=True negative-control-refuted=True
+PASS net_virt_rx: obligations verified=True negative-control-refuted=True
+PASS timer_driver: obligations verified=True negative-control-refuted=True
+PASS tcp_net_copier: obligations verified=True negative-control-refuted=True
+PASS tcp_pd: obligations verified=True negative-control-refuted=True
+PASS tls_pd: obligations verified=True negative-control-refuted=True
+PASS http_pd: obligations verified=True negative-control-refuted=True
+PASS policy_pd: obligations verified=True negative-control-refuted=True
+PASS connector_pd: obligations verified=True negative-control-refuted=True
+VIPER CAPABILITY OBLIGATIONS: PASS (12 PDs, image /home/shi3z/git/qedos/build/sel4)

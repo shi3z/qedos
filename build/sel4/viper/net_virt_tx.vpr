@@ -1,4 +1,4 @@
-// exported invariants for PD net_virt_tx in /home/shi3z/proofsecure/build/sel4/proofgate.system
+// exported invariants for PD net_virt_tx in /home/shi3z/git/qedos/build/sel4/proofgate.system
 define mk_is_protected_source(x) (false)
 define f_mk_is_protected_source(heap,gv,x) (mk_is_protected_source(x))
 define mk_is_ppcall_target(x) (false)

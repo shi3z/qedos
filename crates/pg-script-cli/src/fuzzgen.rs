@@ -123,6 +123,9 @@ struct Gen<'a> {
     next_label: u32,
     loop_depth: u32,
     result: Option<T>,
+    /// trap-free mode: keeps programs running to completion so deep code paths are exercised
+    safe: bool,
+    table: Vec<Option<u32>>,
 }
 
 impl<'a> Gen<'a> {
@@ -148,10 +151,14 @@ impl<'a> Gen<'a> {
     }
     fn addr(&mut self, depth: u32) -> E {
         let sz = self.mem_bytes as i64;
-        match self.r.below(10) {
-            0..=5 => E::Const(T::I32, self.r.below((sz - 16).max(1) as u64) as i64),
-            6 => E::Const(T::I32, sz - 8 + self.r.below(12) as i64),
-            7 => E::Const(T::I32, [-1i64, -8, 0x7fff_ffff, 0x8000_0000u32 as i32 as i64][self.r.below(4) as usize]),
+        if self.safe {
+            let inner = self.expr(T::I32, depth.saturating_sub(1));
+            return E::Bin(0x71, Box::new(inner), Box::new(E::Const(T::I32, 0x7fff.min(sz - 64))));
+        }
+        match self.r.below(20) {
+            0..=13 => E::Const(T::I32, self.r.below((sz - 16).max(1) as u64) as i64),
+            14 => E::Const(T::I32, sz - 8 + self.r.below(12) as i64),
+            15 => E::Const(T::I32, [-1i64, -8, 0x7fff_ffff, 0x8000_0000u32 as i32 as i64][self.r.below(4) as usize]),
             _ => {
                 let inner = self.expr(T::I32, depth.saturating_sub(1));
                 E::Bin(0x71, Box::new(inner), Box::new(E::Const(T::I32, (sz - 1).min(0xffff))))
@@ -159,10 +166,13 @@ impl<'a> Gen<'a> {
         }
     }
     fn offset(&mut self) -> u32 {
-        match self.r.below(8) {
-            0..=4 => 0,
-            5 => self.r.below(16) as u32,
-            6 => 0xffff_fff0,
+        if self.safe {
+            return self.r.below(16) as u32;
+        }
+        match self.r.below(20) {
+            0..=13 => 0,
+            14..=17 => self.r.below(16) as u32,
+            18 => 0xffff_fff0,
             _ => self.r.below(70000) as u32,
         }
     }
@@ -176,7 +186,15 @@ impl<'a> Gen<'a> {
             2..=7 => {
                 let (lo, n) = if t == T::I32 { (0x6A, 15) } else { (0x7C, 15) };
                 let op = lo + self.r.below(n) as u8;
-                E::Bin(op, Box::new(self.expr(t, d)), Box::new(self.expr(t, d)))
+                let lhs = self.expr(t, d);
+                let mut rhs = self.expr(t, d);
+                let is_divrem = matches!(op, 0x6D..=0x70 | 0x7F..=0x82);
+                if is_divrem && (self.safe || self.r.chance(70)) {
+                    // positive, non-zero divisor: no DivByZero / IntOverflow in the common case
+                    let (and, or) = if t == T::I32 { (0x71, 0x72) } else { (0x83, 0x84) };
+                    rhs = E::Bin(or, Box::new(E::Bin(and, Box::new(rhs), Box::new(E::Const(t, 0xffff)))), Box::new(E::Const(t, 1)));
+                }
+                E::Bin(op, Box::new(lhs), Box::new(rhs))
             }
             8 | 9 => {
                 let ops: &[u8] = if t == T::I32 { &[0x67, 0x68, 0x69, 0xC0, 0xC1] } else { &[0x79, 0x7A, 0x7B, 0xC2, 0xC3, 0xC4] };
@@ -286,6 +304,18 @@ impl<'a> Gen<'a> {
         if !self.in_handle || self.table_len == 0 || self.sigs.is_empty() {
             return None;
         }
+        if self.safe {
+            let live: Vec<usize> = (0..self.table.len())
+                .filter(|i| self.table[*i].is_some_and(|f| self.sigs[f as usize].1 == Some(t)))
+                .collect();
+            if live.is_empty() {
+                return None;
+            }
+            let slot = live[self.r.below(live.len() as u64) as usize];
+            let (params, res) = self.sigs[self.table[slot].unwrap() as usize].clone();
+            let a = self.args(&params, d);
+            return Some(E::CallIndirect(params, res, a, Box::new(E::Const(T::I32, slot as i64))));
+        }
         // usually the signature of a real helper that returns `t`; sometimes a mismatching one
         let c: Vec<usize> = (0..self.sigs.len()).filter(|i| self.sigs[*i].1 == Some(t)).collect();
         let (params, res) = if !c.is_empty() && self.r.chance(80) {
@@ -383,7 +413,7 @@ impl<'a> Gen<'a> {
             20 => {
                 let c: Vec<u32> = (0..self.callable).filter(|i| self.sigs[*i as usize].1.is_none()).collect();
                 if c.is_empty() {
-                    if self.r.chance(3) {
+                    if !self.safe && self.r.chance(3) {
                         return S::Unreachable;
                     }
                     return S::Nop;
@@ -393,7 +423,7 @@ impl<'a> Gen<'a> {
                 S::CallStmt(f, self.args(&params, d))
             }
             _ => {
-                if self.r.chance(4) {
+                if !self.safe && self.r.chance(4) {
                     S::Unreachable
                 } else if self.r.chance(8) {
                     match self.result {
@@ -408,7 +438,8 @@ impl<'a> Gen<'a> {
     }
 }
 
-fn gen_func(r: &mut Rng, sigs: &[(Vec<T>, Option<T>)], idx: usize, globals: &[(T, bool, i64)], in_handle: bool, table_len: usize, mem_bytes: u64) -> Func {
+fn gen_func(r: &mut Rng, sigs: &[(Vec<T>, Option<T>)], idx: usize, globals: &[(T, bool, i64)], in_handle: bool, table: &[Option<u32>], mem_bytes: u64, safe: bool) -> Func {
+    let table_len = table.len();
     let (params, result) = sigs[idx].clone();
     let mut locals = vec![T::I32, T::I32, T::I64, T::I64];
     locals.extend([T::I32, T::I32, T::I32]); // loop counters (ctr_base .. ctr_base+3)
@@ -430,6 +461,8 @@ fn gen_func(r: &mut Rng, sigs: &[(Vec<T>, Option<T>)], idx: usize, globals: &[(T
         next_label: 0,
         loop_depth: 0,
         result,
+        safe,
+        table: table.to_vec(),
     };
     let _ = g.n_params;
     let depth = 3;
@@ -466,10 +499,11 @@ pub fn gen_prog(r: &mut Rng) -> Prog {
         }
     }
     let mem_bytes = mem_pages as u64 * 65536;
+    let safe = r.chance(40);
     let mut funcs = vec![];
     for i in 0..sigs.len() {
         let last = i == sigs.len() - 1;
-        funcs.push(gen_func(r, &sigs, i, &globals, last, table.len(), mem_bytes));
+        funcs.push(gen_func(r, &sigs, i, &globals, last, &table, mem_bytes, safe));
     }
     let data = (0..r.below(3))
         .map(|_| {

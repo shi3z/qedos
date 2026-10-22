@@ -180,6 +180,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pg-script-proofcheck"
+version = "0.1.0"
+dependencies = [
+ "pg-script",
+ "pg-script-policy",
+ "pg-script-verify",
+]
+
+[[package]]
 name = "pg-script-verify"
 version = "0.1.0"
 dependencies = [

@@ -14,3 +14,4 @@ pg-config = { path = "../pg-config" }
 pg-script = { path = "../pg-script" }
 pg-script-policy = { path = "../pg-script-policy" }
 pg-script-verify = { path = "../pg-script-verify" }
+pg-script-proofcheck = { path = "../pg-script-proofcheck" }

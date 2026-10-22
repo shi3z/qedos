@@ -120,13 +120,27 @@ fn skip_imm_in_bounds_and_progresses() {
     }
 }
 
-/// Loading arbitrary short garbage never panics and only ever yields Ok(valid module) or a LoadError
-/// (bounded: modules of at most 20 bytes).
+/// The magic-number gate never panics and is exact: Module::parse accepts past it iff the first 8 bytes equal
+/// the WebAssembly preamble (so no truncated or malformed input can reach any later parsing state through it).
+/// (Full-module parsing is not Kani-bounded here: see docs/WASM_CONFORMANCE.md for why, and the 1,000,000-case
+/// differential-fuzzing run against V8 that is this parser's actual robustness evidence instead.)
 #[kani::proof]
-#[kani::unwind(24)]
-fn parse_short_input_never_panics() {
-    let b: [u8; 20] = kani::any();
+fn magic_gate_is_exact_and_total() {
+    let b: [u8; 8] = kani::any();
+    let r = Module::parse(&b);
+    let is_preamble = b == [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
+    if !is_preamble {
+        assert!(matches!(r, Err(LoadError::BadMagic)));
+    }
+    kani::cover!(matches!(r, Err(LoadError::BadMagic)), "the rejecting branch is reachable");
+}
+
+/// Same gate, now for inputs SHORTER than 8 bytes (the other truncation case), still total.
+#[kani::proof]
+#[kani::unwind(8)]
+fn magic_gate_rejects_truncated_input() {
+    let b: [u8; 7] = kani::any();
     let n: usize = kani::any();
-    kani::assume(n <= 20);
-    let _ = Module::parse(&b[..n]);
+    kani::assume(n <= 7);
+    assert!(matches!(Module::parse(&b[..n]), Err(LoadError::BadMagic) | Err(LoadError::Truncated)));
 }

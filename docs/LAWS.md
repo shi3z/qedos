@@ -59,13 +59,17 @@ Legend (stricter than above, because several kinds of "checked" exist):
 
 Reproduce everything (offline-capable except the seL4 build, which needs the toolchain described in QED_SCRIPT.md):
 ```sh
-scripts/qs-ws.sh test                                   # Rust unit/fuzz tests of the new crates (+ existing pure crates)
+scripts/qs-ws.sh test                                   # Rust unit/fuzz tests of all pure crates (incl. pg-ipc, pg-script-proofcheck)
 python3 tests/test_script.py && python3 tests/test_script_security.py
-cargo kani -p pg-script && cargo kani -p pg-script-policy                    # 4 + 3 harnesses
+cargo kani -p pg-script -p pg-script-policy -p pg-ipc -p pg-script-proofcheck   # 7 + 3 + 14 + 3 harnesses
 for f in proofs/smt/*.smt2; do z3 $f; done                                    # unsat, sat(control), unsat
-python3 scripts/check-script-caps.py --selftest         # capability audit incl. 9 weakened systems
+python3 scripts/capgraph.py --dir build/sel4-script --selftest                # 20/20 weakened models detected
+python3 scripts/viper-capability.py build/sel4-script                        # Silicon+Z3 obligations, 13/13 PDs
 sh scripts/check-laws.sh                                # static checks incl. QED Script
-python3 tests/test_script_sel4.py                       # builds QEDOS_SCRIPT=1 image, boots QEMU, 9 end-to-end tests
+tests/ipc/run.sh                                        # ASan/UBSan adversarial IPC harnesses
+python3 tests/test_wasm_differential.py --cases 1000000 --jobs $(nproc)       # differential fuzz vs V8
+python3 tests/test_wasm_regress.py                       # regression corpus of bugs the fuzzer found
+python3 tests/test_script_sel4.py                       # builds QEDOS_SCRIPT=1 image, boots QEMU, 11 end-to-end tests
 ```
 
 ## LAW_013 — MEMORY ISOLATION
@@ -84,9 +88,9 @@ python3 tests/test_script_sel4.py                       # builds QEDOS_SCRIPT=1 
 3. **Code.** `crates/pg-script-policy/src/lib.rs` (`Api`), `sel4/meta_proofgate.py` (QEDOS_SCRIPT branch), `sel4/script/script.fragment.xml`, `scripts/check-script-caps.py`, `scripts/check-caps.py`.
 4. **Method.** AUDITED: exact-equality checks on maps, channels, IRQ/ioport/child-PD/VM, priority; fragment ↔ `meta_proofgate.py` mirror check; 9 deliberately weakened systems must each be rejected; Microkit `--viper-output` emits `script_pd.vpr`, and `check-caps.py` applies the existing "no IRQ/ioport/TCB cap" checks to it.
 5. **Commands.** `python3 scripts/check-script-caps.py --selftest`; `python3 scripts/check-script-caps.py build/sel4-script/proofgate.system`; `QEDOS_SEL4_DIR=build/sel4-script python3 scripts/check-caps.py`.
-6. **Result.** Selftest `9/9` mutants detected; real generated system `SCRIPT_CAP_AUDIT PASS`; `CAP_AUDIT PASS: verified 13 PDs, 16 channels, 13 Viper models`.
+6. **Result.** Superseded by `scripts/capgraph.py` (checks against the *generated CapDL authority*, not just the SDF): selftest `20/20` mutants detected including a `supervisor_pd`-aware set; real generated system `CAPGRAPH PASS` (checks A1-A7, C1-C8, see `docs/CAPABILITY_AUDIT.md`); Z3 Datalog re-derivation (C8) independently confirms no path to a secret region or hardware authority.
 7. **Assumptions.** Microkit tool + CapDL initialiser realise the SDF faithfully; seL4 kernel enforces capabilities (x86_64 proof status: see SECURITY.md caveat).
-8. **Not verified.** The `.vpr` files are *generated* and checked by pattern; **the Viper obligations were not discharged by running Viper** (as for LAW_008/012 in this repo). No proof that `script_pd.c` / the C-ABI Rust shim are memory-safe. If the interpreter were exploited, the attacker would hold exactly the audited authority — that bound is audited, not proven.
+8. **Not verified.** `scripts/viper-capability.py` now DOES run Silicon+Z3 against the exported `.vpr` predicates for all 13 PDs (see `docs/HARDENING_RESULTS.md`); this still checks the exported predicates against the SDF, not the kernel's enforcement of them. No proof that `script_pd.c` / the C-ABI Rust shim are memory-safe (mitigated by `#![forbid(unsafe_code)]` Rust + ASan host testing of the C glue, `docs/IPC_VERIFICATION.md`). If the interpreter were exploited, the attacker would hold exactly the audited authority.
 
 ## LAW_015 — HOST API CONFINEMENT
 1. **Definition.** A guest can invoke only host functions that its signed policy allows, that it declares as imports, and whose signature matches.
@@ -114,9 +118,15 @@ python3 tests/test_script_sel4.py                       # builds QEDOS_SCRIPT=1 
 3. **Code.** `host.rs` (`execute`, `fail`), `sel4/pds/script_pd.c`, `policy_pd.c` (busy gate), `meta_proofgate.py` (priority 92).
 4. **Method.** TESTED: host (fuel, wall-clock via `Clock`), seL4/QEMU SCRIPT_007 (runaway loop → 503), SCRIPT_008 (`/health` served in 0.09 s while it runs), SCRIPT_009 (script_pd deliberately faulted via a test-only build flag: TLS handshakes, `/health`, proxying continue; later `/script/*` requests get 503).
 5. **Commands.** `python3 tests/test_script_sel4.py`.
-6. **Result.** 9/9 on QEMU TCG.
-7. **Assumptions.** seL4 priority scheduling; Microkit fault handling leaves a faulted PD stopped.
-8. **Not verified / not implemented.** **The seL4 image has no timer client for `script_pd`, so `max_exec_us` is enforced only on the host runtime; on seL4 the time bound is the fuel bound** (≈ 3 M fuel ≈ 0.5 s under QEMU TCG). No watchdog/restart of a dead `script_pd`. Priority isolation was observed, not proven; MCS budget parameters are defaults. Fuel-to-time mapping is empirical.
+6. **Result.** 11/11 on QEMU TCG (added SCRIPT_010 wall-clock watchdog, SCRIPT_011 crash-loop fail-closed).
+7. **Assumptions.** seL4 priority scheduling; Microkit fault handling delivers the fault to the parent PD.
+8. **Now implemented: `supervisor_pd`** (parent of `script_pd`, holds its TCB capability) — a wall-clock watchdog
+   (`pg_ipc::Watchdog`, Kani-proven over its full input domain) restarts `script_pd` when a request outruns a
+   configured timeout independent of fuel, and on any fault; a burst of restarts inside a window makes the
+   supervisor fail closed (leave `script_pd` stopped) rather than loop forever. `max_exec_us` is still enforced
+   only on the host runtime, not inside `script_pd` itself on seL4 — the backstop is the external watchdog, not an
+   in-PD timer. Restart re-establishes all of `script_pd`'s state from `init()` (data/bss are not reloaded by a
+   Microkit restart) and discards the in-flight request; this is TESTED (SCRIPT_009/010/011), not proven.
 
 ## LAW_018 — KEY NON-DISCLOSURE
 1. **Definition.** No script-observable output depends on the TLS private key or on other PDs' private state.

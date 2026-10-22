@@ -217,16 +217,30 @@ fn main() {
                 iters as f64 / el.as_secs_f64(), el.as_secs_f64() * 1e6 / iters as f64, parse_us, verify_us, pg_script::wasm::size_of_instance(), wasm.len());
         }
         Some("mkproof") if a.len() == 3 => {
-            // qs mkproof <MemorySafe|FuelBounded|HostApiSubset> <dir>: writes a *well-formed but unchecked* app.proof
-            // envelope bound to app.wasm/app.policy. There is no checker, so the runtime will not rely on it.
+            // qs mkproof <MemorySafe|FuelBounded|HostApiSubset> <dir>: writes an app.proof envelope bound to
+            // app.wasm/app.policy. For FuelBounded and HostApiSubset this targets pg-script-proofcheck's
+            // CHECKER_ID and (for FuelBounded) a bound derived from the module itself, via `qs verify`'s
+            // `--check-proof`. The runtime's own trust decision (proof_accepted()) is unchanged by this: it
+            // always re-verifies independently rather than trusting what this command wrote.
             use pg_script_verify::proof::{build, Claim};
             let claim = match a[1].as_str() { "MemorySafe" => Claim::MemorySafe, "FuelBounded" => Claim::FuelBounded, "HostApiSubset" => Claim::HostApiSubset, _ => die("unknown claim") };
             let wasm = fs::read(format!("{}/app.wasm", a[2])).unwrap();
             let pol = fs::read(format!("{}/app.policy", a[2])).unwrap();
             let mut buf = vec![0u8; 1024];
-            let n = build(claim, 0, &wasm, &pol, b"no-checker-yet", &mut buf);
+            let (checker_id, payload): (u16, Vec<u8>) = match claim {
+                Claim::FuelBounded => {
+                    let module = pg_script::Module::parse(&wasm).unwrap_or_else(|e| die(&format!("bad module: {e:?}")));
+                    match pg_script_proofcheck::fuel_bound_hint(&module) {
+                        Some(n) => (pg_script_proofcheck::CHECKER_ID, n.to_be_bytes().to_vec()),
+                        None => die("module is outside the loop-free FuelBounded subset (see docs/LAWS.md)"),
+                    }
+                }
+                Claim::HostApiSubset => (pg_script_proofcheck::CHECKER_ID, Vec::new()),
+                Claim::MemorySafe => (0, b"no-checker-yet".to_vec()),
+            };
+            let n = build(claim, checker_id, &wasm, &pol, &payload, &mut buf);
             fs::write(format!("{}/app.proof", a[2]), &buf[..n]).unwrap();
-            println!("wrote {}/app.proof ({} bytes, UNCHECKED claim {:?})", a[2], n, claim);
+            println!("wrote {}/app.proof ({} bytes, claim {:?}, checker_id {})", a[2], n, claim, checker_id);
         }
         Some("pack") if a.len() >= 3 => {
             // qs pack <out.qsb> <dir>...   (embeds already-signed bundles; verification happens on the target)
@@ -250,6 +264,20 @@ fn main() {
             }
             fs::write(&a[1], &out).unwrap();
             println!("packed {} bundle(s), {} bytes -> {}", dirs.len(), out.len(), a[1]);
+        }
+        Some("proof-check") if a.len() >= 2 => {
+            // qs proof-check <dir>: runs the INDEPENDENT checker (pg-script-proofcheck) on app.proof.
+            // This does not change what the runtime trusts (pg_script_verify::VerifiedScript::proof_accepted()
+            // is unconditionally false); it reports what a checker pass over this exact module/policy concludes.
+            let dir = &a[1];
+            let wasm = fs::read(format!("{dir}/app.wasm")).unwrap();
+            let pol = fs::read(format!("{dir}/app.policy")).unwrap();
+            let proof = fs::read(format!("{dir}/app.proof")).unwrap_or_else(|_| die("missing app.proof"));
+            let policy = pg_script_policy::Policy::parse(&pol).unwrap_or_else(|e| die(&format!("bad policy: {e:?}")));
+            let module = pg_script::Module::parse(&wasm).unwrap_or_else(|e| die(&format!("bad module: {e:?}")));
+            let r = pg_script_proofcheck::check(&proof, &wasm, &pol, &module, &policy);
+            println!("{r:?}");
+            if r != pg_script_proofcheck::Checked::Accepted { exit(4); }
         }
         Some("verify") | Some("run") => {
             let run = a[0] == "run";

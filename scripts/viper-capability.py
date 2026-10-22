@@ -89,6 +89,8 @@ def build_program(pd, info, chan, vpr):
     for pred in ("pansel4_has_tcb_cap", "pansel4_has_irq_handler_cap", "pansel4_has_ioport_cap", "pansel4_has_vcpu_cap", "pansel4_has_arm_smc_cap"):
         if pd in NO_HW_EXCEPT and pred in NO_HW_EXCEPT[pd]:
             continue
+        if pred == "pansel4_has_tcb_cap" and info["children"]:
+            continue  # a parent PD legitimately holds its declared children's TCB capabilities (restart/stop authority)
         L.append(f"  assert forall c: Int :: !{pred}(c)")
     if info["irqs"] == 0:
         L.append("  assert forall c: Int :: !mk_is_irq_channel(c)")

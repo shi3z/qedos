@@ -6,14 +6,14 @@ set -eu
 R=$(cd "$(dirname "$0")/.." && pwd)
 W=$R/build/qs/ws
 mkdir -p "$W/crates"
-for c in pg-http pg-policy pg-config pg-script-policy pg-script pg-script-verify pg-script-cli pg-ipc; do
+for c in pg-http pg-policy pg-config pg-script-policy pg-script pg-script-verify pg-script-cli pg-ipc pg-script-proofcheck; do
   [ -e "$W/crates/$c" ] || ln -s "$R/crates/$c" "$W/crates/$c"
 done
 [ -e "$W/config" ] || ln -s "$R/config" "$W/config"
 cat > "$W/Cargo.toml" <<'T'
 [workspace]
 resolver = "2"
-members = ["crates/pg-http","crates/pg-policy","crates/pg-config","crates/pg-script-policy","crates/pg-script","crates/pg-script-verify","crates/pg-script-cli","crates/pg-ipc"]
+members = ["crates/pg-http","crates/pg-policy","crates/pg-config","crates/pg-script-policy","crates/pg-script","crates/pg-script-verify","crates/pg-script-cli","crates/pg-ipc","crates/pg-script-proofcheck"]
 [workspace.package]
 edition = "2021"
 license = "Apache-2.0"

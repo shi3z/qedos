@@ -1,0 +1,245 @@
+{
+ "meta": {
+  "dir": "build/sel4-script",
+  "report_sha": "4a697f5b8b2abf65",
+  "system_sha": "87d171b3f7c9c1ee"
+ },
+ "subject": "script_pd",
+ "authority": {
+  "signal": [
+   "http_pd",
+   "policy_pd"
+  ],
+  "send": [],
+  "call": [
+   "supervisor_pd"
+  ],
+  "irq": [],
+  "ioport": [],
+  "maps": {
+   "shm_policy_script": "rw",
+   "shm_script_http": "rw"
+  },
+  "other_caps": [],
+  "priority": 92
+ },
+ "hops": {
+  "script_pd": 0,
+  "http_pd": 1,
+  "policy_pd": 1,
+  "supervisor_pd": 1,
+  "connector_pd": 2,
+  "monitor": 2,
+  "tls_pd": 2,
+  "timer_driver": 2,
+  "tcp_pd": 3,
+  "net_virt_tx": 4,
+  "serial_virt_tx": 4,
+  "tcp_net_copier": 4,
+  "ethernet_driver": 5,
+  "serial_driver": 5,
+  "net_virt_rx": 5
+ },
+ "checks": [
+  {
+   "id": "A1",
+   "title": "every SDF channel end appears as exactly the expected notification capability (object, rights, badge)",
+   "status": "PASS",
+   "evidence": "18 channels x 2 ends verified against CNode slots 10+id"
+  },
+  {
+   "id": "A2",
+   "title": "no notification capability exists that is not explained by an SDF channel",
+   "status": "PASS",
+   "evidence": "none"
+  },
+  {
+   "id": "A3",
+   "title": "no PD CSpace holds Frame/PageTable/TCB/SchedContext/CNode/Untyped capabilities other than its own VSpace root (nobody can retype or remap)",
+   "status": "PASS",
+   "evidence": {
+    "self_vspace_root_only": [
+     "connector_pd",
+     "ethernet_driver",
+     "http_pd",
+     "net_virt_rx",
+     "net_virt_tx",
+     "policy_pd",
+     "script_pd",
+     "serial_driver",
+     "serial_virt_tx",
+     "supervisor_pd",
+     "tcp_net_copier",
+     "tcp_pd",
+     "timer_driver",
+     "tls_pd"
+    ]
+   }
+  },
+  {
+   "id": "A4",
+   "title": "every memory region has exactly size/4KiB kernel frame objects (no hidden aliasing of region frames)",
+   "status": "PASS",
+   "evidence": "34 regions checked"
+  },
+  {
+   "id": "A5",
+   "title": "every PD thread has its own CSpace/VSpace/SchedContext and the fault endpoint bound",
+   "status": "PASS",
+   "evidence": "14 TCBs"
+  },
+  {
+   "id": "A6",
+   "title": "no two threads share an address space or CSpace (one TCB per PD VSpace)",
+   "status": "PASS",
+   "evidence": "unique"
+  },
+  {
+   "id": "A7",
+   "title": "fault-endpoint capabilities are send-only and carry a badge unique to their PD",
+   "status": "PASS",
+   "evidence": "13 distinct badges"
+  },
+  {
+   "id": "B1",
+   "title": "generated authority of every PD equals the intended authority in security/cap-policy.json (both directions)",
+   "status": "PASS",
+   "evidence": "14 PDs identical"
+  },
+  {
+   "id": "C1",
+   "title": "script_pd has no mapping of any secret/trusted region ['tls_keystore', 'shm_signed_config'] (no direct path to the TLS key or the signed config)",
+   "status": "PASS",
+   "evidence": {
+    "tls_keystore": [
+     "tls_pd"
+    ],
+    "shm_signed_config": [
+     "policy_pd"
+    ]
+   }
+  },
+  {
+   "id": "C2",
+   "title": "script_pd can neither create nor obtain endpoints: no Untyped/TCB/CNode/Frame caps; its only endpoint is the send-only fault endpoint to its supervisor (or the monitor)",
+   "status": "PASS",
+   "evidence": {
+    "other_caps": [],
+    "call": [
+     "supervisor_pd"
+    ],
+    "send": [],
+    "parent": "supervisor_pd"
+   }
+  },
+  {
+   "id": "C3",
+   "title": "script_pd can signal exactly ['http_pd', 'policy_pd']; in particular no IPC path to connector_pd/tls_pd/tcp_pd or any driver",
+   "status": "PASS",
+   "evidence": {
+    "signal": [
+     "http_pd",
+     "policy_pd"
+    ],
+    "unexpected": []
+   }
+  },
+  {
+   "id": "C4",
+   "title": "script_pd holds no IRQ handler or I/O-port capability",
+   "status": "PASS",
+   "evidence": {
+    "irq": [],
+    "ioport": []
+   }
+  },
+  {
+   "id": "C5",
+   "title": "script_pd memory authority is exactly the declared set (and nothing is mapped writable twice under different names)",
+   "status": "PASS",
+   "evidence": {
+    "shm_policy_script": "rw",
+    "shm_script_http": "rw"
+   }
+  },
+  {
+   "id": "C6",
+   "title": "influence closure computed twice (BFS and Z3 Datalog) agrees",
+   "status": "PASS",
+   "evidence": {
+    "bfs": {
+     "connector_pd": 2,
+     "ethernet_driver": 5,
+     "http_pd": 1,
+     "monitor": 2,
+     "net_virt_rx": 5,
+     "net_virt_tx": 4,
+     "policy_pd": 1,
+     "script_pd": 0,
+     "serial_driver": 5,
+     "serial_virt_tx": 4,
+     "supervisor_pd": 1,
+     "tcp_net_copier": 4,
+     "tcp_pd": 3,
+     "timer_driver": 2,
+     "tls_pd": 2
+    },
+    "z3": [
+     "connector_pd",
+     "ethernet_driver",
+     "http_pd",
+     "monitor",
+     "net_virt_rx",
+     "net_virt_tx",
+     "policy_pd",
+     "script_pd",
+     "serial_driver",
+     "serial_virt_tx",
+     "supervisor_pd",
+     "tcp_net_copier",
+     "tcp_pd",
+     "timer_driver",
+     "tls_pd"
+    ]
+   }
+  },
+  {
+   "id": "C7",
+   "title": "every direct influence target of script_pd is a declared script-interface PD; secret-holding PDs are reachable only through them",
+   "status": "PASS",
+   "evidence": {
+    "direct": [
+     "http_pd",
+     "policy_pd",
+     "supervisor_pd"
+    ],
+    "secret_holders_hops": {
+     "policy_pd": 1,
+     "tls_pd": 2
+    }
+   }
+  },
+  {
+   "id": "C8",
+   "title": "Z3 Datalog: none of {read secret region, write secret region, hold IRQ/I-O-port authority} is derivable for the subject",
+   "status": "PASS",
+   "evidence": {
+    "Reads(script_pd,tls_keystore)": false,
+    "Writes(script_pd,tls_keystore)": false,
+    "Reads(script_pd,shm_signed_config)": false,
+    "Writes(script_pd,shm_signed_config)": false,
+    "HardwareAuthority(script_pd)": false
+   }
+  },
+  {
+   "id": "D1",
+   "title": "kernel binary has no debug syscalls (SysDebugHalt/PutChar/...: any PD may invoke them without a capability)",
+   "status": "WARN",
+   "evidence": "sel4.elf: debug-kernel strings ['Debug halt syscall', 'Debug snapshot', 'halting...']"
+  }
+ ],
+ "kernel": {
+  "debug": true,
+  "detail": "sel4.elf: debug-kernel strings ['Debug halt syscall', 'Debug snapshot', 'halting...']"
+ }
+}

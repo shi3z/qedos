@@ -1,0 +1,51 @@
+PASS  A1  every SDF channel end appears as exactly the expected notification capability (object, rights, badge)
+PASS  A2  no notification capability exists that is not explained by an SDF channel
+PASS  A3  no PD CSpace holds Frame/PageTable/TCB/SchedContext/CNode/Untyped capabilities other than its own VSpace root (nobody can retype or remap)
+PASS  A4  every memory region has exactly size/4KiB kernel frame objects (no hidden aliasing of region frames)
+PASS  A5  every PD thread has its own CSpace/VSpace/SchedContext and the fault endpoint bound
+PASS  A6  no two threads share an address space or CSpace (one TCB per PD VSpace)
+PASS  A7  fault-endpoint capabilities are send-only and carry a badge unique to their PD
+PASS  B1  generated authority of every PD equals the intended authority in security/cap-policy.json (both directions)
+PASS  C1  script_pd has no mapping of any secret/trusted region ['tls_keystore', 'shm_signed_config'] (no direct path to the TLS key or the signed config)
+PASS  C2  script_pd can neither create nor obtain endpoints: no Untyped/TCB/CNode/Frame caps; its only endpoint is the send-only fault endpoint to its supervisor (or the monitor)
+PASS  C3  script_pd can signal exactly ['http_pd', 'policy_pd']; in particular no IPC path to connector_pd/tls_pd/tcp_pd or any driver
+PASS  C4  script_pd holds no IRQ handler or I/O-port capability
+PASS  C5  script_pd memory authority is exactly the declared set (and nothing is mapped writable twice under different names)
+PASS  C6  influence closure computed twice (BFS and Z3 Datalog) agrees
+PASS  C7  every direct influence target of script_pd is a declared script-interface PD; secret-holding PDs are reachable only through them
+PASS  C8  Z3 Datalog: none of {read secret region, write secret region, hold IRQ/I-O-port authority} is derivable for the subject
+WARN  D1  kernel binary has no debug syscalls (SysDebugHalt/PutChar/...: any PD may invoke them without a capability)
+CAPGRAPH PASS (subject script_pd, image build/sel4-script)
+SCRIPT_CAP_AUDIT PASS (delegated to scripts/capgraph.py)
+CAP_AUDIT PASS: verified 12 PDs, 14 channels, and 12 Viper (.vpr) capability models (LAW_008, LAW_011, LAW_012); private-key isolation checked via pd-elf.
+PASS  A1  every SDF channel end appears as exactly the expected notification capability (object, rights, badge)
+PASS  A2  no notification capability exists that is not explained by an SDF channel
+PASS  A3  no PD CSpace holds Frame/PageTable/TCB/SchedContext/CNode/Untyped capabilities other than its own VSpace root (nobody can retype or remap)
+PASS  A4  every memory region has exactly size/4KiB kernel frame objects (no hidden aliasing of region frames)
+PASS  A5  every PD thread has its own CSpace/VSpace/SchedContext and the fault endpoint bound
+PASS  A6  no two threads share an address space or CSpace (one TCB per PD VSpace)
+PASS  A7  fault-endpoint capabilities are send-only and carry a badge unique to their PD
+PASS  B1  generated authority of every PD equals the intended authority in security/cap-policy.json (both directions)
+PASS  C1  script_pd has no mapping of any secret/trusted region ['tls_keystore', 'shm_signed_config'] (no direct path to the TLS key or the signed config)
+PASS  C2  script_pd can neither create nor obtain endpoints: no Untyped/TCB/CNode/Frame caps; its only endpoint is the send-only fault endpoint to its supervisor (or the monitor)
+PASS  C3  script_pd can signal exactly ['http_pd', 'policy_pd']; in particular no IPC path to connector_pd/tls_pd/tcp_pd or any driver
+PASS  C4  script_pd holds no IRQ handler or I/O-port capability
+PASS  C5  script_pd memory authority is exactly the declared set (and nothing is mapped writable twice under different names)
+PASS  C6  influence closure computed twice (BFS and Z3 Datalog) agrees
+PASS  C7  every direct influence target of script_pd is a declared script-interface PD; secret-holding PDs are reachable only through them
+PASS  C8  Z3 Datalog: none of {read secret region, write secret region, hold IRQ/I-O-port authority} is derivable for the subject
+WARN  D1  kernel binary has no debug syscalls (SysDebugHalt/PutChar/...: any PD may invoke them without a capability)
+CAPGRAPH PASS (subject script_pd, image build/sel4-script)
+qemu-system-x86_64: terminating on signal 15 from pid 873711 (timeout)
+PASS SCRIPT_001 capability audit of script image (script_pd authority = 2 regions + 2 channels; LAW_014/018/022)
+PASS SCRIPT_002 script_pd verified 6 signed bundles (2 apps + 4 hostile test modules), 0 rejected (LAW_020)
+PASS SCRIPT_003 GET /script/hello -> {"message":"Hello from QEDOS"} via negotiated X25519MLKEM768 (0.31s incl. handshake under QEMU TCG)
+PASS SCRIPT_004 POST /script/json-echo transformed the JSON body inside the Wasm sandbox
+PASS SCRIPT_005 unknown module / traversal / encoded dot-segments / bad method rejected before any Wasm runs
+PASS SCRIPT_006 existing proxy intact: /health, backend A/B forwarding, hostile rejection, TLS<1.3 and classical groups refused
+PASS SCRIPT_007 OOB access -> 500 generic body, runaway loop -> 503 by fuel, no cross-request residue, no internal detail in responses
+PASS SCRIPT_008 /health answered in 0.07s while the runaway script ran (0.56s total); script_pd is lowest priority
+PASS SCRIPT_009 script_pd crashed: request answered 504 in 0.1s, supervisor restarted it, TLS/health/proxy unaffected, /script/hello works again
+PASS SCRIPT_010 hung script ended by the watchdog after 2.6s (504); /health answered in 0.09s meanwhile; service recovered
+PASS SCRIPT_011 crash loop -> supervisor leaves script_pd stopped (fail closed); script requests shed 503; health, TLS and proxying unaffected
+ALL QED SCRIPT seL4 TESTS PASSED (11/11)
