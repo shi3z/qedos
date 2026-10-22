@@ -1,0 +1,18 @@
+[package]
+name = "pg-ipc-hostffi"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+name = "pg_ipc_hostffi"
+crate-type = ["staticlib"]
+
+[dependencies]
+pg-ipc = { path = "../../../crates/pg-ipc" }
+
+[profile.release]
+panic = "abort"
+overflow-checks = true
+debug = 1

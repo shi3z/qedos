@@ -31,6 +31,7 @@
 #define VADDR_SHM_SCRIPT_HTTP   0x39000000ULL
 
 #define PG_MAX_CONNS    4u
+_Static_assert(PG_MAX_CONNS == 4u, "must equal pg_ipc::MAX_CONNS (crates/pg-ipc/src/lib.rs)");
 #define PG_RING_SIZE    16384u
 #define PG_MAX_TARGET   2048u
 #define PG_MAX_HOST     256u
@@ -51,6 +52,20 @@
 #else
 #error "pg_shm.h: unsupported architecture"
 #endif
+
+/* Decision logic for the single in-flight downstream request (crates/pg-ipc, Kani-verified). Layout == pg_ipc::InFlight. */
+typedef struct {
+    uint8_t  active;
+    uint8_t  slot;
+    uint8_t  _pad[2];
+    uint32_t conn_id;
+} pg_ipc_inflight_t;
+extern void    pg_ipc_inflight_init(pg_ipc_inflight_t *f);
+extern uint8_t pg_ipc_inflight_record(pg_ipc_inflight_t *f, uint8_t slot, const uint32_t *conn_ids /* [PG_MAX_CONNS] */);
+extern uint8_t pg_ipc_inflight_accept(pg_ipc_inflight_t *f, uint8_t slot, const uint32_t *conn_ids /* [PG_MAX_CONNS] */);
+extern void    pg_ipc_inflight_cancel_slot(pg_ipc_inflight_t *f, uint8_t slot);
+extern uint8_t pg_ipc_ring_can_write(uint32_t head, uint32_t tail, uint32_t cap, uint32_t len);
+extern uint8_t pg_ipc_script_header_ok(uint16_t status, uint8_t ctype, uint32_t body_len, uint32_t max_body);
 
 /* =========================================================================
  * 1. shm_tcp_tls: Socket-over-SHM between tcp_pd and tls_pd

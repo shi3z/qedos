@@ -103,9 +103,8 @@ static void reset_world(void)
     memset((void *)shm_script_http, 0, sizeof(*shm_script_http));
     memset((void *)shm_conn_http, 0, sizeof(*shm_conn_http));
     memset(slot_state, 0, sizeof(slot_state));
-#ifdef HAVE_INFLIGHT
     memset(&script_inflight, 0, sizeof(script_inflight));
-#endif
+    memset(&fwd_inflight, 0, sizeof(fwd_inflight));
     last_policy_ack = last_conn_resp = last_script_resp = 0;
 }
 
@@ -122,9 +121,7 @@ int main(void)
     CHECK(shm_http_policy->req_seq == 1, "request reached policy");
     shm_http_policy->slot = 0;
     policy_decides_script();
-#ifdef HAVE_INFLIGHT
     CHECK(script_inflight.active && script_inflight.slot == 0, "script request tracked in flight");
-#endif
     script_responds(0, 200);
     CHECK(resp_bytes(0) > 0, "S1 legit response delivered");
     uint32_t after = resp_bytes(0);
@@ -165,7 +162,8 @@ int main(void)
     shm_script_http->slot = 0; shm_script_http->status = 0xFFFF; shm_script_http->ctype = 0xFF; shm_script_http->keep_alive = 0xFF;
     shm_script_http->body_len = 0xFFFFFFFFu; shm_script_http->resp_seq = 1;
     notified(CH_HTTP_SCRIPT);
-    CHECK(resp_bytes(0) == 0, "S6 oversized length rejected, no read beyond region");
+    /* the in-flight request is answered with a local 502 (client is not left hanging); nothing was read past the region */
+    CHECK(resp_bytes(0) > 0 && memcmp(shm_tls_http->slots[0].resp_buf, "LOCAL 502", 9) == 0, "S6 hostile header -> local 502, no read beyond region");
 
     /* S7 ring-full: corrupt/hostile tls_pd tail must not let http_pd overwrite unread data */
     reset_world();

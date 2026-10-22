@@ -1,0 +1,9 @@
+[package]
+name = "pg-ipc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Safe, verifiable decision logic for the shared-memory protocols between qedos protection domains (request/response correlation, ring arithmetic, header validation)"
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(kani)'] }

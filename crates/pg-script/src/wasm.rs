@@ -688,6 +688,20 @@ pub struct Memory<'m> {
     pub(crate) cap: usize,
 }
 
+/// New memory length after `memory.grow(delta_pages)`, or `None` if it would exceed `cap` (or overflow).
+/// Pure arithmetic, verified for all inputs in proofs.rs.
+#[inline]
+pub fn grow_len(len: usize, cap: usize, delta_pages: u32) -> Option<usize> {
+    let old = (len / PAGE) as u64;
+    let new_pages = old.checked_add(delta_pages as u64)?;
+    let new_len = new_pages.checked_mul(PAGE as u64)?;
+    if new_len > cap as u64 || new_len < len as u64 {
+        None
+    } else {
+        Some(new_len as usize)
+    }
+}
+
 /// Effective-address check used by every guest memory access (LAW_013).
 /// Returns the start index iff `[base+offset, base+offset+size)` lies within `len`.
 /// Computed in 64 bits so the sum of three u32 values cannot wrap.
@@ -753,13 +767,8 @@ impl<'m> Memory<'m> {
     /// `memory.grow`: returns the previous size in pages, or `None` if it would exceed `cap`.
     /// New pages are explicitly zeroed (the scratch region may hold a previous tenant's bytes).
     pub(crate) fn grow(&mut self, delta_pages: u32) -> Option<u32> {
+        let new_len = grow_len(self.len, self.cap, delta_pages)?;
         let old = self.len / PAGE;
-        let new_pages = (old as u64).checked_add(delta_pages as u64)?;
-        let new_len = new_pages.checked_mul(PAGE as u64)?;
-        if new_len > self.cap as u64 {
-            return None;
-        }
-        let new_len = new_len as usize;
         let mut i = self.len;
         while i < new_len {
             self.buf[i] = 0;

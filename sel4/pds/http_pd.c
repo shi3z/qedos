@@ -64,11 +64,7 @@ typedef struct {
 
 static http_slot_state_t slot_state[PG_MAX_CONNS];
 /* The forwarded (backend) request currently in flight, recorded from policy_pd's FORWARD decision. */
-static struct {
-    uint8_t  active;
-    uint8_t  slot;
-    uint32_t conn_id;
-} fwd_inflight;
+static pg_ipc_inflight_t fwd_inflight;
 static uint32_t last_policy_ack = 0;
 static uint32_t last_conn_resp  = 0;
 #ifdef QEDOS_SCRIPT
@@ -77,19 +73,21 @@ static uint32_t last_script_resp = 0;
 /* The ONE script request currently in flight, as known by this PD from policy_pd's decision.
  * A script response is accepted only for exactly this (slot, connection generation) and only once:
  * script_pd is untrusted (LAW_013..022) and must not be able to write into any other client's stream. */
-static struct {
-    uint8_t  active;
-    uint8_t  slot;
-    uint32_t conn_id;
-} script_inflight;
+static pg_ipc_inflight_t script_inflight;
 #endif
+
+/* Connection generations of all slots, for the pg-ipc correlation checks. */
+static void conn_ids_snapshot(uint32_t out[PG_MAX_CONNS])
+{
+    for (uint32_t i = 0; i < PG_MAX_CONNS; i++) { out[i] = slot_state[i].conn_id; }
+}
 
 static void send_resp_to_tls(uint8_t s, const uint8_t *data, size_t len, uint8_t close_conn)
 {
     pg_tls_http_slot_t *ts = &shm_tls_http->slots[s];
     uint32_t head = ts->resp_head;
-    uint32_t used = head - ts->resp_tail; /* tail is written by the peer: treat as untrusted */
-    if (used > PG_MAX_RESP_RAW || len > PG_MAX_RESP_RAW - used) {
+    /* tail is written by the peer: treat as untrusted (pg_ipc_ring_can_write is total and Kani-verified) */
+    if (len > 0xFFFFFFFFu || !pg_ipc_ring_can_write(head, ts->resp_tail, PG_MAX_RESP_RAW, (uint32_t)len)) {
         /* Not enough free space (or a corrupt tail): never overwrite unread data; end the connection. */
         ts->close_after_resp = 1;
         PG_FENCE();
@@ -120,9 +118,9 @@ static void process_slot_requests(uint8_t s)
         st->conn_id = 0;
         st->len = 0;
         st->awaiting_backend = 0;
-        if (fwd_inflight.active && fwd_inflight.slot == s) { fwd_inflight.active = 0; }
+        pg_ipc_inflight_cancel_slot(&fwd_inflight, s);
 #ifdef QEDOS_SCRIPT
-        if (script_inflight.active && script_inflight.slot == s) { script_inflight.active = 0; }
+        pg_ipc_inflight_cancel_slot(&script_inflight, s);
 #endif
         return;
     }
@@ -263,15 +261,15 @@ static void check_policy_completion(void)
     }
 #ifdef QEDOS_SCRIPT
     else if (dec == PG_DECISION_SCRIPT) {
-        script_inflight.active = 1;
-        script_inflight.slot = s;
-        script_inflight.conn_id = slot_state[s].conn_id;
+        uint32_t ids[PG_MAX_CONNS];
+        conn_ids_snapshot(ids);
+        (void)pg_ipc_inflight_record(&script_inflight, s, ids);
     }
 #endif
     else if (dec == PG_DECISION_FORWARD) {
-        fwd_inflight.active = 1;
-        fwd_inflight.slot = s;
-        fwd_inflight.conn_id = slot_state[s].conn_id;
+        uint32_t ids[PG_MAX_CONNS];
+        conn_ids_snapshot(ids);
+        (void)pg_ipc_inflight_record(&fwd_inflight, s, ids);
     }
     /* If PG_DECISION_FORWARD, policy_pd notified connector_pd; wait for CH_HTTP_CONN */
 }
@@ -292,11 +290,11 @@ static void check_connector_response(void)
     shm_conn_http->resp_ack = rseq;
     PG_FENCE();
     /* Deliver only the answer to the forwarded request that is actually in flight, once. */
-    if (!fwd_inflight.active || s != fwd_inflight.slot || s >= PG_MAX_CONNS ||
-        slot_state[s].conn_id != fwd_inflight.conn_id || slot_state[s].conn_id == 0) {
+    uint32_t ids[PG_MAX_CONNS];
+    conn_ids_snapshot(ids);
+    if (!pg_ipc_inflight_accept(&fwd_inflight, s, ids)) {
         return;
     }
-    fwd_inflight.active = 0;
     if (len > 0 && len <= PG_MAX_RESP_RAW) {
         slot_state[s].awaiting_backend = 0;
         send_resp_to_tls(s, shm_conn_http->raw_resp, len, ka ? 0 : 1);
@@ -331,19 +329,20 @@ static void check_script_response(void)
     PG_FENCE();
 
     /* Accept only the response to the request that is actually in flight, once. */
-    if (!script_inflight.active || s != script_inflight.slot || s >= PG_MAX_CONNS ||
-        slot_state[s].conn_id != script_inflight.conn_id || slot_state[s].conn_id == 0 ||
-        len > PG_SCRIPT_BODY_MAX) {
+    uint32_t ids[PG_MAX_CONNS];
+    conn_ids_snapshot(ids);
+    if (!pg_ipc_inflight_accept(&script_inflight, s, ids)) {
         return;
     }
-    script_inflight.active = 0;
-
-    /* Copy the body into private memory before parsing/framing it: the writer may still be running. */
-    for (uint32_t i = 0; i < len; i++) {
-        script_body_copy[i] = shm_script_http->body[i];
+    size_t rlen = 0;
+    if (pg_ipc_script_header_ok(status, ctype, len, PG_SCRIPT_BODY_MAX)) {
+        /* Copy the body into private memory before parsing/framing it: the writer may still be running. */
+        for (uint32_t i = 0; i < len; i++) {
+            script_body_copy[i] = shm_script_http->body[i];
+        }
+        rlen = pg_rust_format_script_response(status, ctype, ka, script_body_copy, len,
+                                              script_http_buf, sizeof(script_http_buf));
     }
-    size_t rlen = pg_rust_format_script_response(status, ctype, ka, script_body_copy, len,
-                                                 script_http_buf, sizeof(script_http_buf));
     slot_state[s].awaiting_backend = 0;
     if (rlen == 0) {
         uint8_t resp[256];

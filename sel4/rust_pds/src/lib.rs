@@ -18,6 +18,9 @@ fn panic(_info: &PanicInfo) -> ! {
     }
 }
 
+// IPC decision shims (logic in the forbid(unsafe) crate pg-ipc; Kani-verified, see crates/pg-ipc/src/proofs.rs)
+include!("../../../crates/pg-ipc/ffi/shims.rs");
+
 fn method_from_u8(m: u8) -> Option<Method> {
     match m {
         0 => Some(Method::Get),

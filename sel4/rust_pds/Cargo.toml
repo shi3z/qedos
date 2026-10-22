@@ -14,6 +14,7 @@ pg-http = { path = "../../crates/pg-http" }
 pg-policy = { path = "../../crates/pg-policy" }
 pg-config = { path = "../../crates/pg-config" }
 pg-script-policy = { path = "../../crates/pg-script-policy" }
+pg-ipc = { path = "../../crates/pg-ipc" }
 
 [profile.release]
 opt-level = 2
