@@ -19,6 +19,7 @@
 #define CH_HTTP_CONN   3
 #ifdef QEDOS_SCRIPT
 #define CH_HTTP_SCRIPT 4
+#define CH_HTTP_SUP    5
 extern size_t pg_rust_format_script_response(uint16_t status, uint8_t ctype, uint8_t keep_alive,
                                              const uint8_t *body_ptr, size_t body_len,
                                              uint8_t *out_ptr, size_t out_cap);
@@ -74,6 +75,32 @@ static uint32_t last_script_resp = 0;
  * A script response is accepted only for exactly this (slot, connection generation) and only once:
  * script_pd is untrusted (LAW_013..022) and must not be able to write into any other client's stream. */
 static pg_ipc_inflight_t script_inflight;
+/* Supervisor protocol (one-way pages): we write armed/done, the supervisor writes abort. */
+static pg_shm_http_sup_t *shm_http_sup = (pg_shm_http_sup_t *)VADDR_SHM_HTTP_SUP;
+static const pg_shm_sup_http_t *shm_sup_http = (const pg_shm_sup_http_t *)VADDR_SHM_SUP_HTTP;
+static uint32_t sup_armed = 0;        /* mirror of shm_http_sup->armed_seq (we are its only writer) */
+static uint32_t last_sup_abort = 0;
+static uint8_t  sup_pending = 0;      /* 1 between "armed" and "done" */
+
+static void sup_arm(void)
+{
+    sup_armed++;
+    sup_pending = 1;
+    PG_FENCE();
+    shm_http_sup->armed_seq = sup_armed;
+    PG_FENCE();
+    microkit_notify(CH_HTTP_SUP);
+}
+
+static void sup_done(void)
+{
+    if (!sup_pending) { return; }
+    sup_pending = 0;
+    PG_FENCE();
+    shm_http_sup->done_seq = sup_armed;
+    PG_FENCE();
+    microkit_notify(CH_HTTP_SUP);
+}
 #endif
 
 /* Connection generations of all slots, for the pg-ipc correlation checks. */
@@ -263,7 +290,9 @@ static void check_policy_completion(void)
     else if (dec == PG_DECISION_SCRIPT) {
         uint32_t ids[PG_MAX_CONNS];
         conn_ids_snapshot(ids);
-        (void)pg_ipc_inflight_record(&script_inflight, s, ids);
+        if (pg_ipc_inflight_record(&script_inflight, s, ids)) {
+            sup_arm();     /* wall-clock watchdog starts for this request */
+        }
     }
 #endif
     else if (dec == PG_DECISION_FORWARD) {
@@ -317,6 +346,7 @@ static void check_script_response(void)
     last_script_resp = rseq;
     /* The decision notification from policy_pd may not have been processed yet on another core. */
     check_policy_completion();
+    sup_done();   /* script_pd answered (the clock only guards liveness; acceptance is decided below) */
 
     /* Snapshot every script-controlled scalar exactly once (no double fetch). */
     uint8_t  s      = shm_script_http->slot;
@@ -357,6 +387,28 @@ static void check_script_response(void)
 }
 #endif
 
+#ifdef QEDOS_SCRIPT
+static void check_supervisor_abort(void)
+{
+    uint32_t a = shm_sup_http->abort_seq;
+    if (a == last_sup_abort) {
+        return;
+    }
+    last_sup_abort = a;
+    /* script_pd was restarted: the request it was serving will never be answered. */
+    uint8_t slot = script_inflight.slot;
+    uint32_t ids[PG_MAX_CONNS];
+    conn_ids_snapshot(ids);
+    if (pg_ipc_inflight_accept(&script_inflight, slot, ids)) {
+        uint8_t resp[256];
+        size_t rlen = pg_rust_format_local_response(504, 0, 0, 0, resp, sizeof(resp));
+        slot_state[slot].awaiting_backend = 0;
+        send_resp_to_tls(slot, resp, rlen, 1);
+    }
+    sup_done();
+}
+#endif
+
 void init(void)
 {
     microkit_dbg_puts("HTTP_PD: initialized (no_std Rust pg-http, forbid(unsafe_code))\n");
@@ -371,6 +423,8 @@ void notified(microkit_channel ch)
 #ifdef QEDOS_SCRIPT
     } else if (ch == CH_HTTP_SCRIPT) {
         check_script_response();
+    } else if (ch == CH_HTTP_SUP) {
+        check_supervisor_abort();
 #endif
     } else if (ch == CH_HTTP_TLS) {
         for (uint8_t s = 0; s < PG_MAX_CONNS; s++) {

@@ -26,6 +26,14 @@ fn panic(_info: &PanicInfo) -> ! {
 static mut SET: Option<ScriptSet<'static>> = None;
 static mut KV: Kv = Kv::new();
 
+/// Forget every verified script and all KV state. Called first in `init()` so that a restarted PD (after a fault or a
+/// watchdog restart, where .data/.bss are NOT reloaded) never runs on state left behind by the previous incarnation.
+#[no_mangle]
+pub unsafe extern "C" fn pg_script_reset() {
+    SET = None;
+    KV = Kv::new();
+}
+
 /// Verify the embedded `QSB1` bundle table. Returns the number of *verified* scripts (>= 0), or a
 /// negative value if the container is malformed. Unverified entries never become executable.
 #[no_mangle]

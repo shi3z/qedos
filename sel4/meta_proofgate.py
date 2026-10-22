@@ -117,13 +117,24 @@ def main() -> None:
     # runaway script can never starve tcp/tls/http/policy/connector (LAW_017).
     script_on = os.environ.get("QEDOS_SCRIPT") == "1"
     script_pd = None
+    supervisor_pd = None
     if script_on:
         script_pd = ProtectionDomain(
             "script_pd", "script_pd.elf", priority=92, budget=20000, stack_size=0x40000, cpu=0
         )
+        # supervisor_pd is script_pd's Microkit PARENT: it alone holds script_pd's TCB capability (restart/stop of that
+        # one PD), runs above script_pd so a hung script cannot starve it, and has no other authority except a timer
+        # client and two one-way pages shared with http_pd.
+        supervisor_pd = ProtectionDomain(
+            "supervisor_pd", "supervisor_pd.elf", priority=93, budget=20000, stack_size=0x20000, cpu=0
+        )
+        SCRIPT_CHILD_ID = 10   # must match SCRIPT_CHILD_ID in sel4/pds/supervisor_pd.c
+        supervisor_pd.add_child_pd(script_pd, child_id=SCRIPT_CHILD_ID)
 
     serial_system.add_client(tcp_pd)
     timer_system.add_client(tcp_pd)
+    if script_on:
+        timer_system.add_client(supervisor_pd)
     net_system.add_client_with_copier(tcp_pd, tcp_net_copier)
     tcp_lwip = Sddf.Lwip(sdf, net_system, tcp_pd)
 
@@ -151,6 +162,10 @@ def main() -> None:
         shm_script_http = MemoryRegion(sdf, "shm_script_http", 0x8000)
         sdf.add_mr(shm_policy_script)
         sdf.add_mr(shm_script_http)
+        shm_http_sup = MemoryRegion(sdf, "shm_http_sup", 0x1000)
+        shm_sup_http = MemoryRegion(sdf, "shm_sup_http", 0x1000)
+        sdf.add_mr(shm_http_sup)
+        sdf.add_mr(shm_sup_http)
 
     for mr in [
         shm_tcp_tls,
@@ -201,6 +216,11 @@ def main() -> None:
         script_pd.add_map(Map(shm_policy_script, 0x3800_0000, "rw"))
         script_pd.add_map(Map(shm_script_http, 0x3900_0000, "rw"))
         http_pd.add_map(Map(shm_script_http, 0x3900_0000, "rw"))
+        # supervisor <-> http_pd: two one-way pages (single writer each, enforced by the MMU permissions)
+        http_pd.add_map(Map(shm_http_sup, 0x3A00_0000, "rw"))
+        supervisor_pd.add_map(Map(shm_http_sup, 0x3A00_0000, "r"))
+        supervisor_pd.add_map(Map(shm_sup_http, 0x3B00_0000, "rw"))
+        http_pd.add_map(Map(shm_sup_http, 0x3B00_0000, "r"))
 
     # 4. qedos IPC Channels
     sdf.add_channel(Channel(tcp_pd, tls_pd, a_id=10, b_id=1))
@@ -213,6 +233,7 @@ def main() -> None:
     if script_on:
         sdf.add_channel(Channel(policy_pd, script_pd, a_id=3, b_id=1))
         sdf.add_channel(Channel(script_pd, http_pd, a_id=2, b_id=4))
+        sdf.add_channel(Channel(http_pd, supervisor_pd, a_id=5, b_id=1))
 
     for pd in [
         serial_driver,
@@ -227,7 +248,7 @@ def main() -> None:
         http_pd,
         policy_pd,
         connector_pd,
-    ] + ([script_pd] if script_on else []):
+    ] + ([supervisor_pd] if script_on else []):   # script_pd is nested inside supervisor_pd (child PD)
         sdf.add_pd(pd)
 
     out_path = os.path.join(args.output, args.sdf)

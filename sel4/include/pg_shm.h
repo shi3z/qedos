@@ -29,6 +29,8 @@
 #define VADDR_TLS_KEYSTORE    0x37000000ULL
 #define VADDR_SHM_POLICY_SCRIPT 0x38000000ULL
 #define VADDR_SHM_SCRIPT_HTTP   0x39000000ULL
+#define VADDR_SHM_HTTP_SUP      0x3A000000ULL   /* http_pd (rw) -> supervisor_pd (r): armed_seq/done_seq */
+#define VADDR_SHM_SUP_HTTP      0x3B000000ULL   /* supervisor_pd (rw) -> http_pd (r): abort_seq */
 
 #define PG_MAX_CONNS    4u
 _Static_assert(PG_MAX_CONNS == 4u, "must equal pg_ipc::MAX_CONNS (crates/pg-ipc/src/lib.rs)");
@@ -65,6 +67,13 @@ extern uint8_t pg_ipc_inflight_record(pg_ipc_inflight_t *f, uint8_t slot, const 
 extern uint8_t pg_ipc_inflight_accept(pg_ipc_inflight_t *f, uint8_t slot, const uint32_t *conn_ids /* [PG_MAX_CONNS] */);
 extern void    pg_ipc_inflight_cancel_slot(pg_ipc_inflight_t *f, uint8_t slot);
 extern uint8_t pg_ipc_ring_can_write(uint32_t head, uint32_t tail, uint32_t cap, uint32_t len);
+typedef struct {            /* layout == pg_ipc::Watchdog */
+    uint8_t  watching;
+    uint32_t seq;
+    uint64_t deadline_ns;
+} pg_ipc_watchdog_t;
+extern uint8_t pg_ipc_watchdog_step(pg_ipc_watchdog_t *w, uint32_t armed, uint32_t done, uint64_t now_ns, uint64_t timeout_ns, uint64_t *arm_ns);
+extern uint8_t pg_ipc_watchdog_fault(pg_ipc_watchdog_t *w);
 extern uint8_t pg_ipc_script_header_ok(uint16_t status, uint8_t ctype, uint32_t body_len, uint32_t max_body);
 
 /* =========================================================================
@@ -242,5 +251,18 @@ typedef struct {
     volatile uint32_t body_len;
     uint8_t           body[PG_SCRIPT_BODY_MAX];
 } pg_shm_script_http_t;
+
+/* =========================================================================
+ * 8. Supervisor (QEDOS_SCRIPT=1 images only): one-way pages, single writer each (enforced by the MMU).
+ *    script_pd has NO mapping of either page and NO channel to supervisor_pd.
+ * ========================================================================= */
+typedef struct {
+    volatile uint32_t armed_seq;   /* http_pd: incremented when a script request is handed to script_pd */
+    volatile uint32_t done_seq;    /* http_pd: set to armed_seq when script_pd has answered it */
+} pg_shm_http_sup_t;
+
+typedef struct {
+    volatile uint32_t abort_seq;   /* supervisor_pd: incremented after it restarted script_pd */
+} pg_shm_sup_http_t;
 
 #endif /* PROOFGATE_SEL4_PG_SHM_H */

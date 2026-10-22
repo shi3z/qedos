@@ -139,3 +139,58 @@ fn script_header_acceptance_implies_safe_framing() {
     }
     kani::cover!(script_header_ok(&h, max), "an acceptable header exists (non-vacuous)");
 }
+
+fn any_watchdog() -> Watchdog {
+    Watchdog { watching: kani::any(), seq: kani::any(), deadline_ns: kani::any() }
+}
+
+/// Restart is only ever requested for a request that is pending, whose clock was started by an earlier step
+/// (same sequence number), and whose deadline has been reached - from any internal state and any inputs.
+#[kani::proof]
+fn watchdog_restart_only_for_overdue_pending_request() {
+    let mut w = any_watchdog();
+    let before = w;
+    let (armed, done, now, timeout): (u32, u32, u64, u64) = (kani::any(), kani::any(), kani::any(), kani::any());
+    if w.step(armed, done, now, timeout) == WatchAction::Restart {
+        assert!(armed != done);
+        assert!(before.watching != 0 && before.seq == armed);
+        assert!(now >= before.deadline_ns);
+        assert!(w.watching == 0);
+    }
+    kani::cover!(w.step(armed, done, now, timeout) == WatchAction::Restart, "restart reachable (non-vacuous)");
+}
+
+/// Nothing pending => never restart, and the watchdog stops watching.
+#[kani::proof]
+fn watchdog_idle_never_restarts() {
+    let mut w = any_watchdog();
+    let (seq, now, timeout): (u32, u64, u64) = (kani::any(), kani::any(), kani::any());
+    assert!(w.step(seq, seq, now, timeout) == WatchAction::Nothing);
+    assert!(!w.is_watching());
+}
+
+/// The first sight of a pending request always starts a full-length clock (no early restart possible), and a
+/// timer re-arm never asks for more than the configured timeout.
+#[kani::proof]
+fn watchdog_new_request_gets_full_timeout() {
+    let mut w = any_watchdog();
+    let (armed, done, now, timeout): (u32, u32, u64, u64) = (kani::any(), kani::any(), kani::any(), kani::any());
+    kani::assume(armed != done);
+    kani::assume(w.watching == 0 || w.seq != armed);
+    assert!(w.step(armed, done, now, timeout) == WatchAction::ArmTimer(timeout));
+    assert!(w.watching != 0 && w.seq == armed);
+    // any later step for the same request never asks for a longer wait than the timeout
+    let now2: u64 = kani::any();
+    kani::assume(now2 >= now);
+    if let WatchAction::ArmTimer(d) = w.step(armed, done, now2, timeout) {
+        assert!(d <= timeout);
+    }
+}
+
+/// A fault always restarts and clears the watched request.
+#[kani::proof]
+fn watchdog_fault_restarts_and_clears() {
+    let mut w = any_watchdog();
+    assert!(w.on_fault() == WatchAction::Restart);
+    assert!(!w.is_watching());
+}

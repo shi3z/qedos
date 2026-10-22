@@ -25,6 +25,7 @@
 
 #define SCRIPT_MEM_BYTES (256u * 1024u)
 
+extern void pg_script_reset(void);
 extern int32_t pg_script_init(const uint8_t *blob_ptr, size_t blob_len, uint32_t *rejected_out);
 extern size_t pg_script_handle(
     uint8_t method_u8,
@@ -59,9 +60,29 @@ static void put_u32(uint32_t v)
     microkit_dbg_puts(&b[i]);
 }
 
+/* init() also runs again when the supervisor restarts this PD: .data/.bss are NOT reloaded, so every piece of state
+ * is re-established here instead of being trusted to be zero. */
+static void reset_state(void)
+{
+    pg_script_reset();
+    for (size_t i = 0; i < sizeof(wasm_mem); i++) { wasm_mem[i] = 0; }
+    for (size_t i = 0; i < sizeof(req_target); i++) { req_target[i] = 0; }
+    for (size_t i = 0; i < sizeof(req_body); i++) { req_body[i] = 0; }
+    for (size_t i = 0; i < sizeof(resp_body); i++) { resp_body[i] = 0; }
+    script_ready = 0;
+    /* Whatever request was in flight when the previous incarnation died is discarded, never re-executed (a request that
+     * crashed or hung the PD must not be able to do it again), and the policy_pd busy gate is released. */
+    last_req_seq = shm_policy_script->req_seq;
+    PG_FENCE();
+    shm_policy_script->ack_seq = last_req_seq;
+    shm_script_http->body_len = 0;
+    PG_FENCE();
+}
+
 void init(void)
 {
     uint32_t rejected = 0;
+    reset_state();
     int32_t n = pg_script_init(script_bundles_section, sizeof(script_bundles_section), &rejected);
     if (n < 0) {
         microkit_dbg_puts("SCRIPT_PD: FATAL - malformed bundle table; no script will run (LAW_020)\n");

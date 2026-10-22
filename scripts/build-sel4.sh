@@ -106,6 +106,16 @@ if [ "${QEDOS_SCRIPT:-0}" = 1 ]; then
   ld.lld -L"$BOARD_DIR/lib" --start-group \
     "$OUT/script_pd.o" "$OUT/libc_shim.o" "$RUST_SCRIPT_A" \
     -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/script_pd.elf"
+  # supervisor_pd: parent of script_pd. --gc-sections drops the (unused) HTTP/policy code that shares the rust_pds archive.
+  clang $COMMON_CFLAGS -DQEDOS_SCRIPT=1 -DSCRIPT_TIMEOUT_MS="${QEDOS_SCRIPT_TIMEOUT_MS:-5000}ULL" \
+    -I"$SDDF/include" -I"$SDDF/include/microkit" -I"$SDDF/include/sddf/util/custom_libc" -Isel4/libc_shim/include \
+    -c "$R/sel4/pds/supervisor_pd.c" -o "$OUT/supervisor_pd.o"
+  ld.lld --gc-sections -L"$BOARD_DIR/lib" --start-group \
+    "$OUT/supervisor_pd.o" "$OUT/libc_shim.o" "$OUT/libsddf_util.a" "$OUT/libsddf_util_debug.a" "$RUST_PDS_A" \
+    -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/supervisor_pd.elf"
+  # the entry point baked into supervisor_pd.c must be script_pd's real ELF entry (restart would jump there)
+  ENTRY=$(llvm-readelf -h "$OUT/script_pd.elf" 2>/dev/null | awk '/Entry point/ {print $4}')
+  [ "$ENTRY" = "0x200000" ] || { echo "script_pd.elf entry point is $ENTRY, supervisor_pd.c expects 0x200000" >&2; exit 1; }
 fi
 
 # 8. Generate `proofgate.system` and sDDF `.data` sections, then patch ELFs
@@ -124,6 +134,7 @@ llvm-objcopy --update-section .net_virt_tx_config="$OUT/net_virt_tx.data" "$OUT/
 llvm-objcopy --update-section .net_copy_config="$OUT/net_copy_tcp_net_copier.data" "$OUT/network_copy0.elf"
 llvm-objcopy --update-section .device_resources="$OUT/timer_driver_device_resources.data" "$OUT/timer_driver.elf"
 llvm-objcopy --update-section .timer_client_config="$OUT/timer_client_tcp_pd.data" "$OUT/tcp_pd.elf"
+[ "${QEDOS_SCRIPT:-0}" = 1 ] && llvm-objcopy --update-section .timer_client_config="$OUT/timer_client_supervisor_pd.data" "$OUT/supervisor_pd.elf"
 llvm-objcopy --update-section .net_client_config="$OUT/net_client_tcp_pd.data" "$OUT/tcp_pd.elf"
 llvm-objcopy --update-section .serial_client_config="$OUT/serial_client_tcp_pd.data" "$OUT/tcp_pd.elf"
 llvm-objcopy --update-section .lib_sddf_lwip_config="$OUT/lib_sddf_lwip_config_tcp_pd.data" "$OUT/tcp_pd.elf"

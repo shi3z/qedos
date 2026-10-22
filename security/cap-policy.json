@@ -145,10 +145,10 @@
     "http_pd",
     "policy_pd"
    ],
-   "send": [
-    "monitor"
+   "send": [],
+   "call": [
+    "supervisor_pd"
    ],
-   "call": [],
    "irq": [],
    "ioport": [],
    "maps": {
@@ -157,11 +157,11 @@
    },
    "other_caps": [],
    "priority": 92,
-   "rationale": "Untrusted-code host. Exactly two shared regions and two notification channels (policy_pd request in, http_pd response out). No secrets, no hardware, no children. Lowest priority.",
+   "rationale": "Untrusted-code host and CHILD of supervisor_pd. Two shared regions and two notification channels (policy_pd request in, http_pd response out). Its fault endpoint is the supervisor's endpoint (send-only, badge fixed by the initialiser); it holds no capability to the Microkit monitor. No secrets, no hardware, no children. Lowest priority.",
    "interface_pds": [
     "http_pd",
     "policy_pd",
-    "monitor"
+    "supervisor_pd"
    ],
    "optional": true
   },
@@ -296,6 +296,29 @@
    "other_caps": [],
    "priority": 96,
    "rationale": "Only PD that maps the TLS key store (read-only). Talks to tcp_pd (ciphertext) and http_pd (plaintext) only."
+  },
+  "supervisor_pd": {
+   "rationale": "Parent of script_pd: the only holder of script_pd's TCB capability (restart/stop of that one PD). Timer client, one channel to http_pd, a read-only page from http_pd and a one-way write page to http_pd. Runs just above script_pd so a hung script cannot starve it.",
+   "signal": [
+    "http_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [
+    "timer_driver"
+   ],
+   "irq": [],
+   "ioport": [],
+   "other_caps": [
+    "TCB:tcb_script_pd"
+   ],
+   "maps": {
+    "shm_http_sup": "r",
+    "shm_sup_http": "rw"
+   },
+   "priority": 93,
+   "optional": true
   }
  },
  "features": {
@@ -304,10 +327,13 @@
    "add": {
     "http_pd": {
      "signal": [
-      "script_pd"
+      "script_pd",
+      "supervisor_pd"
      ],
      "maps": {
-      "shm_script_http": "rw"
+      "shm_script_http": "rw",
+      "shm_http_sup": "rw",
+      "shm_sup_http": "r"
      }
     },
     "policy_pd": {
@@ -317,6 +343,11 @@
      "maps": {
       "shm_policy_script": "rw"
      }
+    },
+    "timer_driver": {
+     "signal": [
+      "supervisor_pd"
+     ]
     }
    }
   }

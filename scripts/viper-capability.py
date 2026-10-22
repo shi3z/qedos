@@ -40,7 +40,7 @@ def parse_sdf(path):
     root = ET.parse(path).getroot()
     mrs = {m.attrib["name"]: int(m.attrib["size"], 0) for m in root.findall("memory_region")}
     pds = {}
-    for pd in root.findall("protection_domain"):
+    for pd in root.iter("protection_domain"):
         maps = []
         for m in pd.findall("map"):
             va = int(m.attrib["vaddr"].replace("_", ""), 0)

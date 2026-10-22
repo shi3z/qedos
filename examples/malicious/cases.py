@@ -115,6 +115,9 @@ case("timeout_by_clock", mod("loop\nbr 0\nend" + OK0), expect=("status", 503, "T
 # Modules that are also packed into the seL4 test image (tests/test_script_sel4.py): distinct module ids.
 case("sel4_spin", mod("loop\nbr 0\nend" + OK0), expect=("status", 503, "Trap("),  # host: Timeout (wall clock); seL4 image: OutOfFuel
      policy=policy_text(module="spin", max_fuel="3000000"))
+# Burns the platform-maximum fuel (50M): minutes under QEMU TCG, so the supervisor's wall-clock watchdog must end it.
+case("sel4_hang", mod("loop\nbr 0\nend" + OK0), expect=("status", 503, "Trap("),
+     policy=policy_text(module="hang", max_fuel="50000000"))
 case("sel4_oob", mod("i32.const -16\ni32.load\ndrop" + OK0), expect=("status", 500, "OutOfBounds"),
      policy=policy_text(module="oob"))
 case("sel4_leak", mod("""i32.const 0

@@ -123,6 +123,73 @@ pub fn script_header_ok(h: &ScriptHeader, max_body: u32) -> bool {
         && !(matches!(h.status, 204 | 205 | 304) && h.body_len > 0)
 }
 
+/// What the supervisor must do after looking at the world.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WatchAction {
+    /// nothing to do
+    Nothing,
+    /// arm a one-shot timer that fires after the given number of nanoseconds, then call `step` again
+    ArmTimer(u64),
+    /// the watched request is overdue (or the child faulted): restart the script PD and abort the request
+    Restart,
+}
+
+/// Wall-clock watchdog for the single script request that may be in flight.
+///
+/// Inputs come from a shared page written by `http_pd` (`armed_seq`, `done_seq`: a request is pending iff they
+/// differ) and from a monotonic clock. Every input is untrusted bits; the only conclusions drawn are "pending or not",
+/// "is this the request I started the clock for", and "is the deadline reached". A compromised `script_pd` cannot reach
+/// these inputs at all (it has no mapping of the page and no channel to the supervisor).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Watchdog {
+    pub watching: u8,
+    pub seq: u32,
+    pub deadline_ns: u64,
+}
+
+impl Watchdog {
+    pub const fn new() -> Watchdog {
+        Watchdog { watching: 0, seq: 0, deadline_ns: 0 }
+    }
+
+    pub fn is_watching(&self) -> bool {
+        self.watching != 0
+    }
+
+    /// Re-evaluate after any event (new request armed, request finished, timer fired, spurious wake-up).
+    pub fn step(&mut self, armed_seq: u32, done_seq: u32, now_ns: u64, timeout_ns: u64) -> WatchAction {
+        if armed_seq == done_seq {
+            self.watching = 0; // nothing pending: stop the clock
+            return WatchAction::Nothing;
+        }
+        if self.watching == 0 || self.seq != armed_seq {
+            // a (new) request is pending: start its clock
+            self.watching = 1;
+            self.seq = armed_seq;
+            self.deadline_ns = now_ns.saturating_add(timeout_ns);
+            return WatchAction::ArmTimer(timeout_ns);
+        }
+        if now_ns >= self.deadline_ns {
+            self.watching = 0;
+            return WatchAction::Restart;
+        }
+        WatchAction::ArmTimer(self.deadline_ns - now_ns) // still pending, not yet due: re-arm for the remainder
+    }
+
+    /// The child faulted: restart regardless of timers; forget the request that was being watched.
+    pub fn on_fault(&mut self) -> WatchAction {
+        self.watching = 0;
+        WatchAction::Restart
+    }
+}
+
+impl Default for Watchdog {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +223,24 @@ mod tests {
         assert!(!ring_can_write(5, u32::MAX - 2, 16, 9));
         assert!(!ring_can_write(100, 0, 16, 0), "inconsistent indices refuse even zero-length writes");
         assert_eq!(ring_pos(u32::MAX, 16384), 16383);
+    }
+
+    #[test]
+    fn watchdog_restarts_only_overdue_pending_requests() {
+        let mut w = Watchdog::new();
+        assert_eq!(w.step(5, 5, 0, 100), WatchAction::Nothing, "idle");
+        assert_eq!(w.step(6, 5, 1000, 100), WatchAction::ArmTimer(100), "request 6 pending: start clock");
+        assert_eq!(w.step(6, 5, 1050, 100), WatchAction::ArmTimer(50), "early spurious wake-up: no restart");
+        assert_eq!(w.step(6, 5, 1100, 100), WatchAction::Restart, "deadline reached");
+        assert!(!w.is_watching());
+        assert_eq!(w.step(6, 6, 1200, 100), WatchAction::Nothing, "restart marked the request done");
+        // a slow request that completes in time is never restarted, even if a stale timer fires later
+        assert_eq!(w.step(7, 6, 2000, 100), WatchAction::ArmTimer(100));
+        assert_eq!(w.step(7, 7, 2050, 100), WatchAction::Nothing);
+        assert_eq!(w.step(7, 7, 2500, 100), WatchAction::Nothing, "stale timer after completion");
+        // saturation: absurd timeout never overflows
+        assert_eq!(w.step(9, 7, u64::MAX - 1, u64::MAX), WatchAction::ArmTimer(u64::MAX));
+        assert_eq!(w.on_fault(), WatchAction::Restart);
     }
 
     #[test]

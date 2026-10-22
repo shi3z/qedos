@@ -88,12 +88,15 @@ def parse_report(path):
 def parse_system(path):
     root = ET.parse(path).getroot()
     pds, maps, mrs, chans = {}, {}, {}, []
-    for pd in root.findall("protection_domain"):
+    parent_of = {}
+    for pd in root.iter("protection_domain"):          # includes nested (child) PDs
         n = pd.attrib["name"]
-        pds[n] = {k: pd.attrib.get(k) for k in ("priority", "budget", "period", "passive", "stack_size")}
+        pds[n] = {k: pd.attrib.get(k) for k in ("priority", "budget", "period", "passive", "stack_size", "id")}
         pds[n]["irqs"] = [dict(i.attrib) for i in pd.findall("irq")]
         pds[n]["ioports"] = [dict(i.attrib) for i in pd.findall("ioport")]
         pds[n]["children"] = [c.attrib["name"] for c in pd.findall("protection_domain")]
+        for c in pds[n]["children"]:
+            parent_of[c] = n
         maps[n] = {m.attrib["mr"]: {"perms": m.attrib["perms"], "vaddr": m.attrib["vaddr"],
                                     "cached": m.attrib.get("cached", "true")} for m in pd.findall("map")}
     for mr in root.findall("memory_region"):
@@ -101,7 +104,7 @@ def parse_system(path):
     for ch in root.findall("channel"):
         e = ch.findall("end")
         chans.append(tuple((x.attrib["pd"], int(x.attrib["id"]), x.attrib.get("pp", "false"), x.attrib.get("notify", "true")) for x in e))
-    return {"pds": pds, "maps": maps, "mrs": mrs, "chans": chans}
+    return {"pds": pds, "maps": maps, "mrs": mrs, "chans": chans, "parent_of": parent_of}
 
 
 # ----------------------------------------------------------------------------------------- model
@@ -350,7 +353,8 @@ def run_checks(m, subject, policy, kernel_info):
     for pd in m.pds:
         for slot, c in m.cap[pd].items():
             kind = objs.get(c["object"], "?")
-            if kind in ("Notification", "Endpoint") and c["object"] not in (f"ntfn_{pd}", f"ep_{pd}", "ep_fault_monitor") and slot not in expected_out.get(pd, set()):
+            parent_ep = f"ep_{m.sys['parent_of'].get(pd)}" if pd in m.sys["parent_of"] else None
+            if kind in ("Notification", "Endpoint") and c["object"] not in (f"ntfn_{pd}", f"ep_{pd}", "ep_fault_monitor", parent_ep) and slot not in expected_out.get(pd, set()):
                 extra.append(f"{pd}.slot{slot} -> {c['object']}")
     R.add("A2", "no notification capability exists that is not explained by an SDF channel", not extra, extra or "none")
     frames_in_cnode, self_vs = [], []
@@ -360,6 +364,8 @@ def run_checks(m, subject, policy, kernel_info):
             if k in ("Page", "PageTable", "SchedContext", "TCB", "CNode", "Untyped"):
                 if s == BASE_SLOT_VSPACE and c["object"] == f"pml4_{pd}":
                     self_vs.append(pd)          # the PD's own top-level page table (see CAPABILITY_AUDIT.md)
+                elif k == "TCB" and c["object"] == "tcb_" + next((ch for ch in m.sys["pds"][pd]["children"] if c["object"] == "tcb_" + ch), "\0"):
+                    pass                        # a parent's TCB capability for its own declared child PD (restart/stop authority)
                 else:
                     frames_in_cnode.append(f"{pd}.slot{s}->{c['object']}")
     R.add("A3", "no PD CSpace holds Frame/PageTable/TCB/SchedContext/CNode/Untyped capabilities other than its own VSpace root (nobody can retype or remap)",
@@ -382,6 +388,12 @@ def run_checks(m, subject, policy, kernel_info):
     fe, badges = [], {}
     for pd in m.pds:
         for slot, c in m.cap[pd].items():
+            par = m.sys["parent_of"].get(pd)
+            if par and c["object"] == f"ep_{par}" and slot == BASE_SLOT_FAULT:
+                want = (1 << 62) | int(m.sys["pds"][pd]["id"])
+                if sorted(c["rights"] or []) != ["Grant Reply", "Write"] or c["badge"] != want:
+                    fe.append(f"{pd}.slot{slot}: child fault endpoint {c['rights']} badge {c['badge']:#x}, expected Write+GrantReply badge {want:#x}")
+                continue
             if c["object"] == "ep_fault_monitor":
                 if sorted(c["rights"] or []) != ["Grant Reply", "Write"]:
                     fe.append(f"{pd}.slot{slot} rights {c['rights']} (must be exactly Write+GrantReply: a Read right would let the PD receive other PDs' faults)")
@@ -429,9 +441,11 @@ def run_checks(m, subject, policy, kernel_info):
     R.add("C1", f"{sp} has no mapping of any secret/trusted region {key_mrs} (no direct path to the TLS key or the signed config)",
           not direct_secret, direct_secret or {mr: h for mr, h in key_holders.items()})
     bad_caps = [f"{k}:{v}" for k in ("other_caps", "call") for v in s[k]]
+    parent = m.sys["parent_of"].get(sp)
     ep_ok = s["send"] in ([], ["monitor"])
-    R.add("C2", f"{sp} can neither create nor obtain endpoints: no Untyped/TCB/CNode/Frame caps, no endpoint other than the monitor fault endpoint (send-only)",
-          not bad_caps and ep_ok, {"other_caps": s["other_caps"], "call": s["call"], "send": s["send"]})
+    bad_caps = [f"{k}:{v}" for k in ("other_caps",) for v in s[k]] + [f"call:{v}" for v in s["call"] if v != parent]
+    R.add("C2", f"{sp} can neither create nor obtain endpoints: no Untyped/TCB/CNode/Frame caps; its only endpoint is the send-only fault endpoint to its supervisor (or the monitor)",
+          not bad_caps and ep_ok, {"other_caps": s["other_caps"], "call": s["call"], "send": s["send"], "parent": parent})
     allowed_sig = set(policy["pds"][sp].get("signal", []))
     sig_extra = sorted(set(s["signal"]) - allowed_sig)
     R.add("C3", f"{sp} can signal exactly {sorted(allowed_sig)}; in particular no IPC path to connector_pd/tls_pd/tcp_pd or any driver",
@@ -562,6 +576,11 @@ def selftest(d, subject):
         "script gets a TCB cap": add_slot(subject, 20, "tcb_tls_pd", ("Write",), None),
         "script gets a frame cap": add_slot(subject, 21, "frame_mr_tls_keystore_000000000", ("Write",), None),
         "script gets read on monitor endpoint": add_slot(subject, 22, "ep_fault_monitor", ("Read", "Write"), 7),
+        "script can receive on its supervisor endpoint": add_slot(subject, 2, "ep_supervisor_pd", ("Read", "Write", "Grant Reply"), (1 << 62) | 10),
+        "script gets a signal cap to supervisor": add_slot(subject, 23, "ntfn_supervisor_pd"),
+        "script maps the supervisor page": add_map(subject, "shm_http_sup", "rw"),
+        "script fault badge forged as another child": add_slot(subject, 2, "ep_supervisor_pd", ("Write", "Grant Reply"), (1 << 62) | 3),
+        "supervisor gets a TCB cap for http_pd": add_slot("supervisor_pd", 213, "tcb_http_pd", ("Write",), None),
         "script priority raised above tls_pd": prio(subject, 99),
         "tls_pd also maps the script region": add_map("tls_pd", "shm_script_http"),
         "channel notification cap dropped": drop_slot("http_pd", 14),

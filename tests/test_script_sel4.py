@@ -11,7 +11,9 @@ QED Script end-to-end tests on seL4 + Microkit in QEMU (`build/sel4-script/loade
   SCRIPT_006  existing proxy features still work (health, backend A/B, hostile-request rejection, TLS downgrade refusal)
   SCRIPT_007  hostile Wasm (OOB access, runaway loop, state-leak probe) contained; no secret in response; other PDs keep serving
   SCRIPT_008  /health answered while a runaway script is burning fuel in script_pd (availability isolation)
-  SCRIPT_009  script_pd deliberately crashed (test-only fault injection): TLS, /health, proxying keep working
+  SCRIPT_009  script_pd deliberately crashed (test-only fault injection): request answered 504, supervisor restarts it, service recovers
+  SCRIPT_010  a hung script (platform-maximum fuel) is ended by the supervisor's wall-clock watchdog (504), service recovers
+  SCRIPT_011  crash loop: supervisor fails closed (script_pd left stopped); health, TLS and proxying unaffected
 """
 import os, subprocess, sys, threading, time
 
@@ -46,14 +48,15 @@ def post(path, body, timeout=30.0):
 def main():
     # build the hostile modules (signed with the dev code-signing key) and the image
     subprocess.run([sys.executable, os.path.join(ROOT, "examples/malicious/build.py")], check=True, stdout=subprocess.DEVNULL)
-    extra = " ".join(os.path.join(ROOT, "examples/malicious/out", n) for n in ("sel4_spin", "sel4_oob", "sel4_leak"))
+    extra = " ".join(os.path.join(ROOT, "examples/malicious/out", n) for n in ("sel4_spin", "sel4_oob", "sel4_leak", "sel4_hang"))
     if os.environ.get("QS_SKIP_BUILD") != "1":
-        env = dict(os.environ, QEDOS_SCRIPT="1", QEDOS_SCRIPT_EXTRA=extra, QEDOS_SCRIPT_TEST_FAULT="1",
+        env = dict(os.environ, QEDOS_SCRIPT="1", QEDOS_SCRIPT_EXTRA=extra, QEDOS_SCRIPT_TEST_FAULT="1", QEDOS_SCRIPT_TIMEOUT_MS="2500",
                    PATH=os.path.join(ROOT, "third_party/venv/bin") + os.pathsep + os.environ["PATH"])
         subprocess.run([os.path.join(ROOT, "scripts/build-sel4.sh")], check=True, env=env, stdout=subprocess.DEVNULL)
 
     subprocess.run([sys.executable, os.path.join(ROOT, "scripts/check-script-caps.py"), os.path.join(IMG_DIR, "proofgate.system")], check=True)
     subprocess.run([sys.executable, os.path.join(ROOT, "scripts/check-caps.py")], check=True)
+    subprocess.run([sys.executable, os.path.join(ROOT, "scripts/capgraph.py"), "--dir", IMG_DIR, "--allow-debug-kernel"], check=True)
     ok("SCRIPT_001", "capability audit of script image (script_pd authority = 2 regions + 2 channels; LAW_014/018/022)")
 
     if os.path.exists(T.SERIAL_LOG):
@@ -64,7 +67,7 @@ def main():
         deadline = time.time() + 60
         while time.time() < deadline:
             s = T.read_serial()
-            if all(k in s for k in ("TLS_PD: OpenSSL 3.6.1 initialized", "HTTP_PD: initialized", "SCRIPT_PD: Ed25519 code-signature",
+            if all(k in s for k in ("TLS_PD: OpenSSL 3.6.1 initialized", "HTTP_PD: initialized", "SCRIPT_PD: Ed25519 code-signature", "SUPERVISOR: initialized",
                                     "POLICY_PD: Ed25519 signed config verified OK", "CONNECTOR_PD: initialized", "TCP_PD: DHCP lease acquired")):
                 break
             time.sleep(0.25)
@@ -72,8 +75,8 @@ def main():
             print(T.read_serial(), file=sys.stderr)
             raise RuntimeError("script image did not finish booting")
         time.sleep(0.5)
-        assert "verified=5 rejected=0" in T.read_serial(), T.read_serial()
-        ok("SCRIPT_002", "script_pd verified 5 signed bundles (2 apps + 3 hostile test modules), 0 rejected (LAW_020)")
+        assert "verified=6 rejected=0" in T.read_serial(), T.read_serial()
+        ok("SCRIPT_002", "script_pd verified 6 signed bundles (2 apps + 4 hostile test modules), 0 rejected (LAW_020)")
 
         t0 = time.time()
         out = get("/script/hello")
@@ -140,25 +143,65 @@ def main():
         assert "HTTP/1.1 503" in res["spin"]
         ok("SCRIPT_008", f"/health answered in {t_health:.2f}s while the runaway script ran ({t_spin:.2f}s total); script_pd is lowest priority")
 
-        # SCRIPT_009: crash script_pd itself (test-only build flag QEDOS_SCRIPT_TEST_FAULT), then use everything else
-        try:
-            get("/script/crash", timeout=8)
-            crashed_reply = True
-        except subprocess.TimeoutExpired:
-            crashed_reply = False
-        assert not crashed_reply, "crashed script_pd cannot have answered"
-        time.sleep(1)
+        # SCRIPT_009: crash script_pd itself (test-only build flag QEDOS_SCRIPT_TEST_FAULT): the request fails fast
+        # (504 from http_pd after the supervisor restarted script_pd), everything else keeps working, the service comes back.
+        t0 = time.time()
+        o = get("/script/crash", timeout=40)
+        t_crash = time.time() - t0
+        assert "HTTP/1.1 504" in o, o
         slog = T.read_serial()
-        assert ("script_pd" in slog and ("fault" in slog.lower() or "Fault" in slog)), slog[-1500:]
+        assert "SUPERVISOR: restarting script_pd (fault)" in slog, slog[-1500:]
         for _ in range(3):
             assert "ok\n" in get("/health")
         o = post("/api/chat", b"after-crash")
         assert '"backend": "A"' in o and '"body_len": 11' in o, o
-        o = get("/script/hello", timeout=15)
-        assert "HTTP/1.1 503" in o and "Hello from QEDOS" not in o, o   # shed, not hung
+        for _ in range(20):
+            o = get("/script/hello", timeout=30)
+            if "Hello from QEDOS" in o:
+                break
+            time.sleep(0.5)
+        assert "HTTP/1.1 200" in o and "Hello from QEDOS" in o, o
+        assert T.read_serial().count("SCRIPT_PD: Ed25519 code-signature") >= 2, "script_pd re-initialised after the restart"
         assert "TLS_PD: handshake OK version=TLSv1.3 group=X25519MLKEM768" in T.read_serial()
-        ok("SCRIPT_009", "script_pd crashed: TLS 1.3 handshakes, /health and backend proxying unaffected; later script requests shed with 503")
-        print(f"ALL QED SCRIPT seL4 TESTS PASSED ({len(passed)}/9)")
+        ok("SCRIPT_009", f"script_pd crashed: request answered 504 in {t_crash:.1f}s, supervisor restarted it, TLS/health/proxy unaffected, /script/hello works again")
+
+        # SCRIPT_010: a script that never finishes (platform-maximum fuel) is ended by the wall-clock watchdog
+        res = {}
+        th = threading.Thread(target=lambda: res.setdefault("hang", (time.time(), get("/script/hang", timeout=90), time.time())))
+        t0 = time.time()
+        th.start()
+        time.sleep(0.3)
+        t1 = time.time()
+        assert "HTTP/1.1 200 OK" in get("/health", timeout=60)
+        t_health = time.time() - t1
+        th.join()
+        _, o, t_end = res["hang"]
+        assert "HTTP/1.1 504" in o, o
+        assert "SUPERVISOR: restarting script_pd (request overdue)" in T.read_serial()
+        for _ in range(20):
+            o = get("/script/hello", timeout=30)
+            if "Hello from QEDOS" in o:
+                break
+            time.sleep(0.5)
+        assert "Hello from QEDOS" in o, o
+        ok("SCRIPT_010", f"hung script ended by the watchdog after {t_end - t0:.1f}s (504); /health answered in {t_health:.2f}s meanwhile; service recovered")
+
+        # SCRIPT_011: crash loop containment — after a burst of restarts the supervisor fails closed; nothing else is affected
+        for i in range(10):
+            try:
+                get("/script/crash", timeout=40)
+            except subprocess.TimeoutExpired:
+                pass
+        time.sleep(1)
+        assert "crash loop detected" in T.read_serial(), T.read_serial()[-1200:]
+        o = get("/script/hello", timeout=30)
+        assert "HTTP/1.1 503" in o and "Hello from QEDOS" not in o, o
+        for _ in range(3):
+            assert "ok\n" in get("/health")
+        o = post("/api/chat", b"after-loop")
+        assert '"backend": "A"' in o, o
+        ok("SCRIPT_011", "crash loop -> supervisor leaves script_pd stopped (fail closed); script requests shed 503; health, TLS and proxying unaffected")
+        print(f"ALL QED SCRIPT seL4 TESTS PASSED ({len(passed)}/11)")
     finally:
         for p in (qemu, be):
             p.terminate()
