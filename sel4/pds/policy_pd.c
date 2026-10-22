@@ -121,10 +121,12 @@ void notified(microkit_channel ch)
         }
         uint16_t slen = shm_http_policy->target_len;
         if (slen > PG_MAX_TARGET) { slen = PG_MAX_TARGET; }
-        for (uint16_t i = 0; i < slen; i++) { shm_policy_script->target[i] = shm_http_policy->target[i]; }
         uint32_t sblen = shm_http_policy->body_len;
         if (sblen > PG_MAX_REQ_RAW) { sblen = PG_MAX_REQ_RAW; }
-        for (uint32_t i = 0; i < sblen; i++) { shm_policy_script->body[i] = shm_http_policy->body[i]; }
+        /* Whole-buffer overwrite: bytes of an earlier client's request never remain readable by script_pd
+         * beyond the current request's length (request-state isolation even if script_pd is compromised). */
+        for (uint32_t i = 0; i < PG_MAX_TARGET; i++) { shm_policy_script->target[i] = (i < slen) ? shm_http_policy->target[i] : 0; }
+        for (uint32_t i = 0; i < PG_MAX_REQ_RAW; i++) { shm_policy_script->body[i] = (i < sblen) ? shm_http_policy->body[i] : 0; }
         shm_policy_script->target_len = slen;
         shm_policy_script->body_len = sblen;
         shm_policy_script->method = shm_http_policy->method;
@@ -139,6 +141,7 @@ void notified(microkit_channel ch)
         shm_policy_script->req_seq = shm_policy_script->req_seq + 1;
         PG_FENCE();
         microkit_notify(CH_POLICY_SCRIPT);
+        microkit_notify(CH_POLICY_HTTP);   /* http_pd records the in-flight script request from this decision */
         return;
     }
 #endif

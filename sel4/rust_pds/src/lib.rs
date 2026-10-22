@@ -724,7 +724,7 @@ pub unsafe extern "C" fn pg_rust_is_script_route(method_u8: u8, target_ptr: *con
 }
 
 /// Frame a script result as an HTTP/1.1 response. The head is built from fixed strings; the only
-/// script-controlled inputs are the status (already range-checked 100..=599 by the host API), a
+/// script-controlled inputs are the status (re-validated here: 200..=599, body-less statuses must have an empty body), a
 /// 3-valued content-type selector, and the body bytes, so header injection is impossible.
 #[no_mangle]
 pub unsafe extern "C" fn pg_rust_format_script_response(
@@ -736,7 +736,12 @@ pub unsafe extern "C" fn pg_rust_format_script_response(
     out_ptr: *mut u8,
     out_cap: usize,
 ) -> usize {
-    if out_ptr.is_null() || (body_len > 0 && body_ptr.is_null()) || !(100..=599).contains(&status) {
+    // 1xx (interim) and body-less statuses with a body would desynchronise the client's HTTP framing.
+    if out_ptr.is_null()
+        || (body_len > 0 && body_ptr.is_null())
+        || !(200..=599).contains(&status)
+        || (matches!(status, 204 | 205 | 304) && body_len > 0)
+    {
         return 0;
     }
     let out = core::slice::from_raw_parts_mut(out_ptr, out_cap);

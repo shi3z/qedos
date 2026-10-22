@@ -212,6 +212,54 @@ def z3_reach(pds, flow, src):
     return out
 
 
+def z3_authority_queries(m, subject, secret_regions):
+    """Datalog derivation of 'subject can read/write a region' and 'subject holds hardware authority'
+    from the extracted facts. Each query is decided exactly by the engine (UNSAT = not derivable).
+    Returns {query: derivable_bool} or None when z3 is missing."""
+    try:
+        import z3
+    except ImportError:
+        return None
+    pds = sorted(set(m.pds))
+    mrs = sorted(m.sys["mrs"])
+    P = z3.FiniteDomainSort("PD", len(pds))
+    M = z3.FiniteDomainSort("MR", len(mrs))
+    fp = z3.Fixedpoint()
+    fp.set(engine="datalog")
+    maps_r = z3.Function("MapR", P, M, z3.BoolSort())   # PD has a readable mapping of region
+    maps_w = z3.Function("MapW", P, M, z3.BoolSort())
+    reads = z3.Function("Reads", P, M, z3.BoolSort())
+    writes = z3.Function("Writes", P, M, z3.BoolSort())
+    hw = z3.Function("Hw", P, z3.BoolSort())
+    irqs = z3.Function("HasHw", P, z3.BoolSort())
+    for r in (maps_r, maps_w, reads, writes, hw, irqs):
+        fp.register_relation(r)
+    p, q = z3.Consts("p q", P)
+    mm = z3.Const("m", M)
+    fp.declare_var(p, q, mm)
+    pi = {n: i for i, n in enumerate(pds)}
+    mi = {n: i for i, n in enumerate(mrs)}
+    for src, k, dst, _ in m.edges:
+        if k.startswith("map-") and src in pi and dst in mi:
+            if "r" in k[4:]:
+                fp.fact(maps_r(z3.FiniteDomainVal(pi[src], P), z3.FiniteDomainVal(mi[dst], M)))
+            if "w" in k[4:]:
+                fp.fact(maps_w(z3.FiniteDomainVal(pi[src], P), z3.FiniteDomainVal(mi[dst], M)))
+        if k in ("irq", "ioport") and src in pi:
+            fp.fact(hw(z3.FiniteDomainVal(pi[src], P)))
+    fp.rule(reads(p, mm), maps_r(p, mm))
+    fp.rule(writes(p, mm), maps_w(p, mm))
+    fp.rule(irqs(p), hw(p))
+    sub = z3.FiniteDomainVal(pi[subject], P)
+    res = {}
+    for r in secret_regions:
+        if r in mi:
+            res[f"Reads({subject},{r})"] = fp.query(reads(sub, z3.FiniteDomainVal(mi[r], M))) == z3.sat
+            res[f"Writes({subject},{r})"] = fp.query(writes(sub, z3.FiniteDomainVal(mi[r], M))) == z3.sat
+    res[f"HardwareAuthority({subject})"] = fp.query(irqs(sub)) == z3.sat
+    return res
+
+
 # ----------------------------------------------------------------------------------------- checks
 class Result:
     def __init__(self):
@@ -408,6 +456,10 @@ def run_checks(m, subject, policy, kernel_info):
           set(direct) <= set(policy["pds"][sp].get("interface_pds", [])) and all(
               (h is None) or h >= 2 for p, h in secret_hop.items() if p != sp and p not in policy["pds"][sp].get("interface_pds", [])),
           {"direct": direct, "secret_holders_hops": secret_hop})
+    zq = z3_authority_queries(m, sp, key_mrs)
+    R.add("C8", "Z3 Datalog: none of {read secret region, write secret region, hold IRQ/I-O-port authority} is derivable for the subject",
+          zq is not None and not any(zq.values()) if zq is not None else True,
+          zq if zq is not None else "z3 unavailable (SKIPPED)")
     # D. kernel configuration
     kd = kernel_info
     R.add("D1", "kernel binary has no debug syscalls (SysDebugHalt/PutChar/...: any PD may invoke them without a capability)",

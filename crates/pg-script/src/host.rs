@@ -122,7 +122,7 @@ impl<'r, 'p, 'o, 'k, C: Clock> Host for Ctx<'r, 'p, 'o, 'k, C> {
                 Ok(Some(src.len() as i32))
             }
             Api::RespStatus => {
-                if !(100..=599).contains(&a[0]) {
+                if !(200..=599).contains(&a[0]) {
                     return Err(Trap::HostDenied);
                 }
                 self.status = a[0] as u16;
@@ -192,7 +192,7 @@ pub fn resolver<'p>(policy: &'p Policy<'p>) -> impl Fn(&[u8], &[u8], FuncType) -
             return None;
         }
         let (np, nr) = api.signature();
-        if ty.n_params != np || ty.n_results != nr {
+        if ty.n_params != np || ty.n_results != nr || !ty.all_i32() {
             return None;
         }
         Some(api as u8)

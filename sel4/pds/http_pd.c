@@ -68,12 +68,28 @@ static uint32_t last_conn_resp  = 0;
 #ifdef QEDOS_SCRIPT
 static pg_shm_script_http_t *shm_script_http = (pg_shm_script_http_t *)VADDR_SHM_SCRIPT_HTTP;
 static uint32_t last_script_resp = 0;
+/* The ONE script request currently in flight, as known by this PD from policy_pd's decision.
+ * A script response is accepted only for exactly this (slot, connection generation) and only once:
+ * script_pd is untrusted (LAW_013..022) and must not be able to write into any other client's stream. */
+static struct {
+    uint8_t  active;
+    uint8_t  slot;
+    uint32_t conn_id;
+} script_inflight;
 #endif
 
 static void send_resp_to_tls(uint8_t s, const uint8_t *data, size_t len, uint8_t close_conn)
 {
     pg_tls_http_slot_t *ts = &shm_tls_http->slots[s];
     uint32_t head = ts->resp_head;
+    uint32_t used = head - ts->resp_tail; /* tail is written by the peer: treat as untrusted */
+    if (used > PG_MAX_RESP_RAW || len > PG_MAX_RESP_RAW - used) {
+        /* Not enough free space (or a corrupt tail): never overwrite unread data; end the connection. */
+        ts->close_after_resp = 1;
+        PG_FENCE();
+        microkit_notify(CH_HTTP_TLS);
+        return;
+    }
     for (size_t i = 0; i < len; i++) {
         ts->resp_buf[(head + i) % PG_MAX_RESP_RAW] = data[i];
     }
@@ -86,6 +102,8 @@ static void send_resp_to_tls(uint8_t s, const uint8_t *data, size_t len, uint8_t
     microkit_notify(CH_HTTP_TLS);
 }
 
+static void check_policy_completion(void);
+
 static void process_slot_requests(uint8_t s)
 {
     pg_tls_http_slot_t *ts = &shm_tls_http->slots[s];
@@ -96,6 +114,9 @@ static void process_slot_requests(uint8_t s)
         st->conn_id = 0;
         st->len = 0;
         st->awaiting_backend = 0;
+#ifdef QEDOS_SCRIPT
+        if (script_inflight.active && script_inflight.slot == s) { script_inflight.active = 0; }
+#endif
         return;
     }
     if (st->conn_id != cid) {
@@ -127,6 +148,9 @@ static void process_slot_requests(uint8_t s)
         return;
     }
 
+    /* A decision that policy_pd already acknowledged must be consumed BEFORE the shared request fields are
+     * reused for a new evaluation; otherwise the decision (e.g. "script request in flight") is lost. */
+    check_policy_completion();
     /* Do not start a new policy evaluation if policy_pd or connector_pd is busy */
     if (shm_http_policy->req_seq != shm_http_policy->ack_seq) {
         return;
@@ -209,6 +233,9 @@ static void check_policy_completion(void)
     uint8_t dec = shm_http_policy->decision;
     uint8_t is_head = (shm_http_policy->method == 1) ? 1 : 0;
     uint8_t ka = shm_http_policy->keep_alive;
+    if (s >= PG_MAX_CONNS) {
+        return; /* never index slot_state[] with a value read from shared memory */
+    }
 
     if (dec == PG_DECISION_HEALTH) {
         uint8_t resp[256];
@@ -227,6 +254,13 @@ static void check_policy_completion(void)
             process_slot_requests(s);
         }
     }
+#ifdef QEDOS_SCRIPT
+    else if (dec == PG_DECISION_SCRIPT) {
+        script_inflight.active = 1;
+        script_inflight.slot = s;
+        script_inflight.conn_id = slot_state[s].conn_id;
+    }
+#endif
     /* If PG_DECISION_FORWARD, policy_pd notified connector_pd; wait for CH_HTTP_CONN */
 }
 
@@ -255,6 +289,7 @@ static void check_connector_response(void)
 
 #ifdef QEDOS_SCRIPT
 static uint8_t script_http_buf[PG_SCRIPT_BODY_MAX + 1024u];
+static uint8_t script_body_copy[PG_SCRIPT_BODY_MAX];
 
 static void check_script_response(void)
 {
@@ -263,29 +298,42 @@ static void check_script_response(void)
         return;
     }
     last_script_resp = rseq;
+    /* The decision notification from policy_pd may not have been processed yet on another core. */
+    check_policy_completion();
 
-    uint8_t s = shm_script_http->slot;
-    uint8_t ka = shm_script_http->keep_alive;
-    uint32_t len = shm_script_http->body_len;
+    /* Snapshot every script-controlled scalar exactly once (no double fetch). */
+    uint8_t  s      = shm_script_http->slot;
+    uint8_t  ka     = shm_script_http->keep_alive;
+    uint8_t  ctype  = shm_script_http->ctype;
+    uint32_t len    = shm_script_http->body_len;
     uint16_t status = shm_script_http->status;
-    if (s < PG_MAX_CONNS && len <= PG_SCRIPT_BODY_MAX) {
-        size_t rlen = pg_rust_format_script_response(status, shm_script_http->ctype, ka,
-                                                     shm_script_http->body, len,
-                                                     script_http_buf, sizeof(script_http_buf));
-        if (rlen == 0) {
-            uint8_t resp[256];
-            rlen = pg_rust_format_local_response(502, 0, 0, 0, resp, sizeof(resp));
-            slot_state[s].awaiting_backend = 0;
-            send_resp_to_tls(s, resp, rlen, 1);
-        } else {
-            slot_state[s].awaiting_backend = 0;
-            send_resp_to_tls(s, script_http_buf, rlen, ka ? 0 : 1);
-        }
-    }
     PG_FENCE();
     shm_script_http->resp_ack = rseq;
     PG_FENCE();
-    if (s < PG_MAX_CONNS && ka) {
+
+    /* Accept only the response to the request that is actually in flight, once. */
+    if (!script_inflight.active || s != script_inflight.slot || s >= PG_MAX_CONNS ||
+        slot_state[s].conn_id != script_inflight.conn_id || slot_state[s].conn_id == 0 ||
+        len > PG_SCRIPT_BODY_MAX) {
+        return;
+    }
+    script_inflight.active = 0;
+
+    /* Copy the body into private memory before parsing/framing it: the writer may still be running. */
+    for (uint32_t i = 0; i < len; i++) {
+        script_body_copy[i] = shm_script_http->body[i];
+    }
+    size_t rlen = pg_rust_format_script_response(status, ctype, ka, script_body_copy, len,
+                                                 script_http_buf, sizeof(script_http_buf));
+    slot_state[s].awaiting_backend = 0;
+    if (rlen == 0) {
+        uint8_t resp[256];
+        rlen = pg_rust_format_local_response(502, 0, 0, 0, resp, sizeof(resp));
+        send_resp_to_tls(s, resp, rlen, 1);
+    } else {
+        send_resp_to_tls(s, script_http_buf, rlen, ka ? 0 : 1);
+    }
+    if (ka) {
         process_slot_requests(s);
     }
 }
