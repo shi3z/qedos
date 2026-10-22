@@ -17,6 +17,12 @@
 #define CH_HTTP_TLS    1
 #define CH_HTTP_POLICY 2
 #define CH_HTTP_CONN   3
+#ifdef QEDOS_SCRIPT
+#define CH_HTTP_SCRIPT 4
+extern size_t pg_rust_format_script_response(uint16_t status, uint8_t ctype, uint8_t keep_alive,
+                                             const uint8_t *body_ptr, size_t body_len,
+                                             uint8_t *out_ptr, size_t out_cap);
+#endif
 
 extern int32_t pg_rust_parse_http_request(
     const uint8_t *buf_ptr,
@@ -59,6 +65,10 @@ typedef struct {
 static http_slot_state_t slot_state[PG_MAX_CONNS];
 static uint32_t last_policy_ack = 0;
 static uint32_t last_conn_resp  = 0;
+#ifdef QEDOS_SCRIPT
+static pg_shm_script_http_t *shm_script_http = (pg_shm_script_http_t *)VADDR_SHM_SCRIPT_HTTP;
+static uint32_t last_script_resp = 0;
+#endif
 
 static void send_resp_to_tls(uint8_t s, const uint8_t *data, size_t len, uint8_t close_conn)
 {
@@ -243,6 +253,44 @@ static void check_connector_response(void)
     }
 }
 
+#ifdef QEDOS_SCRIPT
+static uint8_t script_http_buf[PG_SCRIPT_BODY_MAX + 1024u];
+
+static void check_script_response(void)
+{
+    uint32_t rseq = shm_script_http->resp_seq;
+    if (rseq == last_script_resp) {
+        return;
+    }
+    last_script_resp = rseq;
+
+    uint8_t s = shm_script_http->slot;
+    uint8_t ka = shm_script_http->keep_alive;
+    uint32_t len = shm_script_http->body_len;
+    uint16_t status = shm_script_http->status;
+    if (s < PG_MAX_CONNS && len <= PG_SCRIPT_BODY_MAX) {
+        size_t rlen = pg_rust_format_script_response(status, shm_script_http->ctype, ka,
+                                                     shm_script_http->body, len,
+                                                     script_http_buf, sizeof(script_http_buf));
+        if (rlen == 0) {
+            uint8_t resp[256];
+            rlen = pg_rust_format_local_response(502, 0, 0, 0, resp, sizeof(resp));
+            slot_state[s].awaiting_backend = 0;
+            send_resp_to_tls(s, resp, rlen, 1);
+        } else {
+            slot_state[s].awaiting_backend = 0;
+            send_resp_to_tls(s, script_http_buf, rlen, ka ? 0 : 1);
+        }
+    }
+    PG_FENCE();
+    shm_script_http->resp_ack = rseq;
+    PG_FENCE();
+    if (s < PG_MAX_CONNS && ka) {
+        process_slot_requests(s);
+    }
+}
+#endif
+
 void init(void)
 {
     microkit_dbg_puts("HTTP_PD: initialized (no_std Rust pg-http, forbid(unsafe_code))\n");
@@ -254,6 +302,10 @@ void notified(microkit_channel ch)
         check_policy_completion();
     } else if (ch == CH_HTTP_CONN) {
         check_connector_response();
+#ifdef QEDOS_SCRIPT
+    } else if (ch == CH_HTTP_SCRIPT) {
+        check_script_response();
+#endif
     } else if (ch == CH_HTTP_TLS) {
         for (uint8_t s = 0; s < PG_MAX_CONNS; s++) {
             process_slot_requests(s);

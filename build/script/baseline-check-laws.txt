@@ -1,0 +1,9 @@
+LAW_005 static check: no process-spawn API in pg-http/pg-policy/pg-config/pg-proxy/sel4
+LAW_006/LAW_011 static check: pg-http, pg-policy, pg-config are #![no_std] and #![forbid(unsafe_code)]
+CAP_AUDIT NOTE: per-PD ELFs ['connector_pd.elf', 'http_pd.elf', 'policy_pd.elf', 'tcp_pd.elf'] not present; scanned prebuilt loader image (77311644 bytes) instead — private key occurs once, at tls_pd .tls_keystore offset 60513443.
+CAP_AUDIT PASS: verified 12 PDs, 14 channels, and 12 Viper (.vpr) capability models (LAW_008, LAW_011, LAW_012); private-key isolation checked via loader-image.
+unsafe blocks in pg-proxy:
+crates/pg-proxy/src/tls.rs:31:    unsafe {
+crates/pg-proxy/src/main.rs:19:    unsafe {
+crates/pg-proxy/src/main.rs:74:    unsafe {
+crates/pg-proxy/src/main.rs:93:            unsafe {

@@ -1,0 +1,23 @@
+[package]
+name = "pg-sel4-script"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+name = "pg_sel4_script"
+crate-type = ["staticlib"]
+
+[dependencies]
+pg-http = { path = "../../crates/pg-http" }
+pg-script = { path = "../../crates/pg-script" }
+pg-script-policy = { path = "../../crates/pg-script-policy" }
+pg-script-verify = { path = "../../crates/pg-script-verify" }
+
+[profile.release]
+opt-level = 2
+panic = "abort"
+overflow-checks = true
+lto = true
+codegen-units = 1

@@ -1,0 +1,7 @@
+PASS SEL4_006 capability & Viper formal model audit
+PASS SEL4_001 TLS 1.3 + X25519MLKEM768 handshake & GET /health on seL4
+PASS SEL4_002 TLS 1.2 refused by seL4 tls_pd (LAW_002)
+PASS SEL4_003 classical groups (X25519, P-256) refused by seL4 tls_pd (LAW_003)
+PASS SEL4_004 5-PD proxying to Backend A & B with header sanitization (LAW_001, LAW_004)
+PASS SEL4_005 hostile requests rejected at http_pd/policy_pd with 0 backend leaks (LAW_006, LAW_007)
+ALL seL4 MULTI-PD TESTS PASSED

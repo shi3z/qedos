@@ -13,6 +13,7 @@ crate-type = ["staticlib"]
 pg-http = { path = "../../crates/pg-http" }
 pg-policy = { path = "../../crates/pg-policy" }
 pg-config = { path = "../../crates/pg-config" }
+pg-script-policy = { path = "../../crates/pg-script-policy" }
 
 [profile.release]
 opt-level = 2

@@ -40,6 +40,9 @@ else:
     QEMU_LAUNCHER = os.path.join(ROOT, "tools/run-echo.sh")
     BOOT_TIMEOUT = 25.0
     QEMU_RUN_SECONDS = "90"
+if os.environ.get("QEDOS_IMG_DIR"):  # e.g. an image rebuilt from source into another directory
+    IMG_DIR = os.path.abspath(os.environ["QEDOS_IMG_DIR"])
+LOADER_IMG_OVERRIDE = IMG_DIR
 os.environ["QEDOS_SEL4_DIR"] = IMG_DIR  # consumed by scripts/check-caps.py
 LOADER_IMG = os.path.join(IMG_DIR, "loader.img")
 SERIAL_LOG = os.path.join(IMG_DIR, "serial.log")

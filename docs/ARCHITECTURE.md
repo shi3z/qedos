@@ -36,10 +36,14 @@ NIC driver (ethernet_driver) → net_virt_rx / net_virt_tx / tcp_net_copier
       └───shm_tcp_conn─────────────── connector_pd (fixed backend IP:port table + `pg-http::parse_response`)
 ```
 
+### 3b. Optional QED Script PD (`QEDOS_SCRIPT=1`, 13 PDs)
+`policy_pd` additionally dispatches `GET|POST /script/<module>` (after the shared path-hygiene check) through `shm_policy_script` to `script_pd`, whose result returns through `shm_script_http` to `http_pd`. `script_pd` maps only those two regions, has two channels (policy_pd, http_pd), priority 92 (lowest), and links the Wasm interpreter `pg-script` via its own staticlib `sel4/rust_script`; no other PD contains interpreter code. Details and rationale: `docs/QED_SCRIPT.md`; capability audit: `scripts/check-script-caps.py`.
+
 ## 4. Crate & component inventory
 
 * `crates/pg-http`: `#![no_std]`, `#![forbid(unsafe_code)]` strict HTTP/1.1 request/response head parser + chunked decoder (8/8 Kani proofs).
 * `crates/pg-policy`: `#![no_std]`, `#![forbid(unsafe_code)]` fixed-route decision engine + path/UTF-8 hygiene (3/3 Kani proofs).
 * `crates/pg-config`: `#![no_std]`, `#![forbid(unsafe_code)]` deterministic binary signed config format (`PGS1`) + pure-Rust RFC 8032 Ed25519 & FIPS 180-4 SHA-512 verification (2/2 Kani proofs).
 * `crates/pg-proxy`: Linux single-thread epoll reference proxy for C10K validation.
+* `crates/pg-script` (Wasm i32-subset interpreter + host API), `crates/pg-script-policy` (policy, route, KV ACL), `crates/pg-script-verify` (signed bundles, proof envelope), `crates/pg-script-cli` (`qs`): all `#![no_std]` + `#![forbid(unsafe_code)]` except the CLI. `sel4/rust_script` + `sel4/pds/script_pd.c`: the Script PD.
 * `sel4/rust_pds`, `sel4/pds`, `sel4/libc_shim`, `sel4/meta_proofgate.py`: seL4/Microkit Protection Domains and system description generator.

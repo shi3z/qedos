@@ -1,0 +1,14 @@
+runtime = qs-wasm/1
+module = json-echo
+version = 1
+allow = req_field
+allow = resp_status
+allow = resp_content_type
+allow = resp_write
+max_memory_bytes = 65536
+max_fuel = 200000
+max_stack_depth = 4
+max_request_bytes = 8192
+max_response_bytes = 4096
+max_host_calls = 64
+max_exec_us = 20000

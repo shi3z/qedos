@@ -22,10 +22,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pg-script-policy"
+version = "0.1.0"
+dependencies = [
+ "pg-http",
+ "pg-policy",
+]
+
+[[package]]
 name = "pg-sel4-pds"
 version = "0.1.0"
 dependencies = [
  "pg-config",
  "pg-http",
  "pg-policy",
+ "pg-script-policy",
 ]

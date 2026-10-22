@@ -703,3 +703,67 @@ pub unsafe extern "C" fn pg_rust_validate_and_frame_response(
     }
     pos
 }
+
+// ============================================================================
+// 5. QED Script glue used by policy_pd / http_pd (only the small route + response-format pieces;
+//    the Wasm interpreter itself is NOT linked into these PDs — see sel4/rust_script).
+// ============================================================================
+
+/// 1 iff `target` is a valid `/script/<module>` request for a GET/POST (LAW_001 path hygiene applies).
+#[no_mangle]
+pub unsafe extern "C" fn pg_rust_is_script_route(method_u8: u8, target_ptr: *const u8, target_len: usize) -> u8 {
+    if target_ptr.is_null() {
+        return 0;
+    }
+    let method = match method_from_u8(method_u8) {
+        Some(m) => m,
+        None => return 0,
+    };
+    let target = core::slice::from_raw_parts(target_ptr, target_len);
+    pg_script_policy::route::script_route(method, target).is_some() as u8
+}
+
+/// Frame a script result as an HTTP/1.1 response. The head is built from fixed strings; the only
+/// script-controlled inputs are the status (already range-checked 100..=599 by the host API), a
+/// 3-valued content-type selector, and the body bytes, so header injection is impossible.
+#[no_mangle]
+pub unsafe extern "C" fn pg_rust_format_script_response(
+    status: u16,
+    ctype: u8,
+    keep_alive: u8,
+    body_ptr: *const u8,
+    body_len: usize,
+    out_ptr: *mut u8,
+    out_cap: usize,
+) -> usize {
+    if out_ptr.is_null() || (body_len > 0 && body_ptr.is_null()) || !(100..=599).contains(&status) {
+        return 0;
+    }
+    let out = core::slice::from_raw_parts_mut(out_ptr, out_cap);
+    let body: &[u8] = if body_len == 0 { &[] } else { core::slice::from_raw_parts(body_ptr, body_len) };
+    let mut pos = 0usize;
+    let mut ok = true;
+    let mut push = |s: &[u8]| {
+        if ok && pos + s.len() <= out.len() {
+            out[pos..pos + s.len()].copy_from_slice(s);
+            pos += s.len();
+        } else {
+            ok = false;
+        }
+    };
+    push(b"HTTP/1.1 ");
+    push(&[b'0' + ((status / 100) % 10) as u8, b'0' + ((status / 10) % 10) as u8, b'0' + (status % 10) as u8, b' ']);
+    push(reason_phrase(status).as_bytes());
+    push(b"\r\nContent-Type: ");
+    push(match ctype {
+        1 => b"text/html; charset=utf-8",
+        2 => b"text/plain; charset=utf-8",
+        _ => b"application/json",
+    });
+    push(b"\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; sandbox\r\nContent-Length: ");
+    let mut num = [0u8; 10];
+    push(format_u32_ascii(body.len() as u32, &mut num));
+    push(if keep_alive != 0 { b"\r\nConnection: keep-alive\r\n\r\n" } else { b"\r\nConnection: close\r\n\r\n" });
+    push(body);
+    if ok { pos } else { 0 }
+}

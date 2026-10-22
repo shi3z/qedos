@@ -19,6 +19,8 @@ case "$ARCH" in
     OPENSSL_SEL4="$R/third_party/openssl-sel4"
     ECHO_DIR="$R/build/echo"
     OUT="$R/build/sel4"
+    [ "${QEDOS_SCRIPT:-0}" = 1 ] && OUT="$R/build/sel4-script"   # never clobber the baseline image
+    [ -n "${QEDOS_OUT:-}" ] && OUT="$QEDOS_OUT"                  # explicit override (e.g. rebuild-from-source checks)
     ;;
   aarch64)
     BOARD=${QEDOS_BOARD:-qemu_virt_aarch64}
@@ -89,6 +91,23 @@ for pd in http_pd policy_pd connector_pd; do
     -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/${pd}.elf"
 done
 
+# 7b. QED Script PD (opt-in: QEDOS_SCRIPT=1). Separate Rust staticlib => the Wasm interpreter is linked
+#     into script_pd.elf ONLY. Policy/HTTP PDs above are rebuilt with -DQEDOS_SCRIPT for the dispatch glue.
+if [ "${QEDOS_SCRIPT:-0}" = 1 ]; then
+  cargo build --manifest-path "$R/sel4/rust_script/Cargo.toml" --target "$RUST_TARGET" --release
+  RUST_SCRIPT_A="$R/sel4/rust_script/target/$RUST_TARGET/release/libpg_sel4_script.a"
+  for pd in http_pd policy_pd; do
+    clang $COMMON_CFLAGS -DQEDOS_SCRIPT=1 -Isel4/libc_shim/include -c "$R/sel4/pds/${pd}.c" -o "$OUT/${pd}.o"
+    ld.lld -L"$BOARD_DIR/lib" --start-group \
+      "$OUT/${pd}.o" "$OUT/libc_shim.o" "$RUST_PDS_A" \
+      -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/${pd}.elf"
+  done
+  clang $COMMON_CFLAGS -DQEDOS_SCRIPT=1 ${QEDOS_SCRIPT_TEST_FAULT:+-DQEDOS_SCRIPT_TEST_FAULT=1} -Isel4/libc_shim/include -c "$R/sel4/pds/script_pd.c" -o "$OUT/script_pd.o"
+  ld.lld -L"$BOARD_DIR/lib" --start-group \
+    "$OUT/script_pd.o" "$OUT/libc_shim.o" "$RUST_SCRIPT_A" \
+    -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/script_pd.elf"
+fi
+
 # 8. Generate `proofgate.system` and sDDF `.data` sections, then patch ELFs
 DTB_ARG=""
 [ "$ARCH" = aarch64 ] && DTB_ARG="--dtb $ECHO_DIR/$BOARD.dtb"
@@ -119,6 +138,13 @@ open(dst, "wb").write(data.ljust(512, b"\x00"))
 PY
 llvm-objcopy --update-section .signed_config="$OUT/signed_config.data" "$OUT/policy_pd.elf"
 
+# Inject the signed QSB1 script bundle table into script_pd.elf `.script_bundles` ONLY (QEDOS_SCRIPT=1).
+# The table is verified at boot inside script_pd against the pinned code-signing key (LAW_020).
+if [ "${QEDOS_SCRIPT:-0}" = 1 ]; then
+  "$R/scripts/pack-script-bundles.sh" "$OUT/script_bundles.data"
+  llvm-objcopy --update-section .script_bundles="$OUT/script_bundles.data" "$OUT/script_pd.elf"
+fi
+
 # Inject TLS cert/key into `tls_pd.elf` `.tls_keystore` section ONLY (LAW_008)
 python3 - "$R/config/dev/cert.pem" "$R/config/dev/key.pem" "$OUT/tls_keystore.data" <<'PY'
 import sys
@@ -138,5 +164,9 @@ llvm-objcopy --update-section .tls_keystore="$OUT/tls_keystore.data" "$OUT/tls_p
   --viper-output "$OUT/viper" \
   -o "$OUT/loader.img" \
   -r "$OUT/report.txt"
+
+if [ "${QEDOS_SCRIPT:-0}" = 1 ]; then
+  python3 "$R/scripts/check-script-caps.py" "$OUT/proofgate.system"
+fi
 
 ls -lh "$OUT/loader.img" "$OUT/report.txt" "$OUT/viper/"

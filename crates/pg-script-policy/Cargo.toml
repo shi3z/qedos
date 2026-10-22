@@ -1,0 +1,13 @@
+[package]
+name = "pg-script-policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "QED Script policy format, host-API allowlist, platform ceilings and KV access control (LAW_015, LAW_016, LAW_021)"
+
+[dependencies]
+pg-http = { path = "../pg-http" }
+pg-policy = { path = "../pg-policy" }
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(kani)'] }

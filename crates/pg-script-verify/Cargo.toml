@@ -1,0 +1,14 @@
+[package]
+name = "pg-script-verify"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "QED Script signed-bundle verification (LAW_020) and proof-certificate admission policy"
+
+[dependencies]
+pg-config = { path = "../pg-config" }
+pg-script = { path = "../pg-script" }
+pg-script-policy = { path = "../pg-script-policy" }
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(kani)'] }

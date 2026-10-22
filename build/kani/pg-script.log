@@ -1,0 +1,1811 @@
+Kani Rust Verifier 0.68.0 (cargo plugin)
+CBMC 6.11.0
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | #![feature(register_tool)]
+  |            ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling pg-script v0.1.0 (/home/shi3z/git/qedos/crates/pg-script)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | #![feature(register_tool)]
+  |            ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | #![feature(register_tool)]
+  |            ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | #![feature(register_tool)]
+  |            ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: Found the following unsupported constructs:
+             - caller_location (1)
+             - foreign function (1)
+         
+         Verification will fail if one or more of these constructs is reachable.
+         See https://model-checking.github.io/kani/rust-feature-support.html for more details.
+
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.65s
+Checking harness proofs::leb_decoders_in_bounds...
+CBMC 6.11.0 (cbmc-6.11.0)
+CBMC version 6.11.0 (cbmc-6.11.0) 64-bit x86_64 linux
+Reading GOTO program from file /home/shi3z/git/qedos/target/kani/x86_64-unknown-linux-gnu/debug/build/pg-script/0dee3a1e5d2c4e84/out/pg_script-0dee3a1e5d2c4e84__RNvNtCs2efljad8yor_9pg_script6proofs22leb_decoders_in_bounds.out
+Generating GOTO Program
+Adding CPROVER library (x86_64)
+Removal of function pointers and virtual functions
+Generic Property Instrumentation
+Running with 16 object bits, 48 offset bits (user-specified)
+Starting Bounded Model Checking
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 50 column 9 function core::slice::index::slice_index_fail::do_panic::runtime thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs line 2641 column 9 function core::slice::index::slice_index_fail::do_panic thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic.rs line 177 column 9 function core::slice::index::slice_index_fail thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 69 column 5 function core::slice::index::slice_index_fail::do_panic::runtime thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs line 2641 column 9 function core::slice::index::slice_index_fail::do_panic thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic.rs line 177 column 9 function core::slice::index::slice_index_fail thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 413 column 13 function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 134 column 21 function wasm::leb_u32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_u32.0 iteration 1 file crates/pg-script/src/wasm.rs line 133 column 5 function wasm::leb_u32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 134 column 21 function wasm::leb_u32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_u32.0 iteration 2 file crates/pg-script/src/wasm.rs line 133 column 5 function wasm::leb_u32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 134 column 21 function wasm::leb_u32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_u32.0 iteration 3 file crates/pg-script/src/wasm.rs line 133 column 5 function wasm::leb_u32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 134 column 21 function wasm::leb_u32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_u32.0 iteration 4 file crates/pg-script/src/wasm.rs line 133 column 5 function wasm::leb_u32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 134 column 21 function wasm::leb_u32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 633 column 5 function core::option::Option::<(u32, usize)>::is_some thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 50 column 9 function core::slice::index::slice_index_fail::do_panic::runtime thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs line 2641 column 9 function core::slice::index::slice_index_fail::do_panic thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic.rs line 177 column 9 function core::slice::index::slice_index_fail thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 69 column 5 function core::slice::index::slice_index_fail::do_panic::runtime thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs line 2641 column 9 function core::slice::index::slice_index_fail::do_panic thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic.rs line 177 column 9 function core::slice::index::slice_index_fail thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 413 column 13 function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 134 column 21 function wasm::leb_u32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_u32.0 iteration 1 file crates/pg-script/src/wasm.rs line 133 column 5 function wasm::leb_u32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 134 column 21 function wasm::leb_u32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_u32.0 iteration 2 file crates/pg-script/src/wasm.rs line 133 column 5 function wasm::leb_u32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 134 column 21 function wasm::leb_u32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_u32.0 iteration 3 file crates/pg-script/src/wasm.rs line 133 column 5 function wasm::leb_u32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 134 column 21 function wasm::leb_u32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_u32.0 iteration 4 file crates/pg-script/src/wasm.rs line 133 column 5 function wasm::leb_u32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 134 column 21 function wasm::leb_u32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 50 column 9 function core::slice::index::slice_index_fail::do_panic::runtime thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs line 2641 column 9 function core::slice::index::slice_index_fail::do_panic thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic.rs line 177 column 9 function core::slice::index::slice_index_fail thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 69 column 5 function core::slice::index::slice_index_fail::do_panic::runtime thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs line 2641 column 9 function core::slice::index::slice_index_fail::do_panic thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic.rs line 177 column 9 function core::slice::index::slice_index_fail thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 413 column 13 function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 155 column 21 function wasm::leb_i32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_i32.0 iteration 1 file crates/pg-script/src/wasm.rs line 154 column 5 function wasm::leb_i32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 155 column 21 function wasm::leb_i32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_i32.0 iteration 2 file crates/pg-script/src/wasm.rs line 154 column 5 function wasm::leb_i32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 155 column 21 function wasm::leb_i32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_i32.0 iteration 3 file crates/pg-script/src/wasm.rs line 154 column 5 function wasm::leb_i32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 155 column 21 function wasm::leb_i32 thread 0
+Unwinding loop _RNvNtCs2efljad8yor_9pg_script4wasm7leb_i32.0 iteration 4 file crates/pg-script/src/wasm.rs line 154 column 5 function wasm::leb_i32 thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<&u8> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 155 column 21 function wasm::leb_i32 thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 58 column 1 function proofs::leb_decoders_in_bounds thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 68 column 9 function proofs::leb_decoders_in_bounds thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 65 column 9 function proofs::leb_decoders_in_bounds thread 0
+Runtime Symex: 0.344256s
+size of program expression: 10026 steps
+slicing removed 6670 assignments
+Generated 310 VCC(s), 170 remaining after simplification
+Runtime Postprocess Equation: 0.00441108s
+Passing problem to propositional reduction
+converting SSA
+Runtime Convert SSA: 0.0456205s
+Running propositional reduction
+Post-processing
+Runtime Post-process: 0.0119206s
+Solving with CaDiCaL 3.0.0
+32796 variables, 83552 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.168887s
+Runtime decision procedure: 0.21616s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+32797 variables, 83553 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.0297834s
+Runtime decision procedure: 0.03066s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+32798 variables, 83554 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.00773448s
+Runtime decision procedure: 0.00868947s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+32799 variables, 83555 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.0042408s
+Runtime decision procedure: 0.00508256s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+32800 variables, 83556 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.00654862s
+Runtime decision procedure: 0.00736681s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+32801 variables, 83557 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.00718841s
+Runtime decision procedure: 0.00804174s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+32802 variables, 83558 clauses
+SAT checker: instance is UNSATISFIABLE
+Runtime Solver: 0.0419419s
+Runtime decision procedure: 0.0421433s
+
+RESULTS:
+Check 1: kani::rustc_intrinsics::offset::<u8, *const u8, usize>.safety_check.1
+	 - Status: SUCCESS
+	 - Description: "Offset in bytes overflows isize"
+	 - Location: library/kani/src/lib.rs:57:1 in function kani::rustc_intrinsics::offset::<u8, *const u8, usize>
+
+Check 2: kani::rustc_intrinsics::offset::<u8, *const u8, usize>.safety_check.2
+	 - Status: SUCCESS
+	 - Description: "Offset result address must equal original pointer address plus offset"
+	 - Location: library/kani/src/lib.rs:57:1 in function kani::rustc_intrinsics::offset::<u8, *const u8, usize>
+
+Check 3: kani::rustc_intrinsics::offset::<u8, *const u8, usize>.safety_check.3
+	 - Status: SUCCESS
+	 - Description: "Offset result and original pointer must point to the same allocation"
+	 - Location: library/kani/src/lib.rs:57:1 in function kani::rustc_intrinsics::offset::<u8, *const u8, usize>
+
+Check 4: wasm::leb_i32.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: crates/pg-script/src/wasm.rs:155:21 in function wasm::leb_i32
+
+Check 5: wasm::leb_i32.assertion.1
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:156:9 in function wasm::leb_i32
+
+Check 6: wasm::leb_i32.assertion.2
+	 - Status: SUCCESS
+	 - Description: "attempt to shift right with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:159:24 in function wasm::leb_i32
+
+Check 7: wasm::leb_i32.assertion.3
+	 - Status: SUCCESS
+	 - Description: "attempt to shift right with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:160:22 in function wasm::leb_i32
+
+Check 8: wasm::leb_i32.assertion.4
+	 - Status: SUCCESS
+	 - Description: "attempt to shift left with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:164:23 in function wasm::leb_i32
+
+Check 9: wasm::leb_i32.assertion.5
+	 - Status: SUCCESS
+	 - Description: "attempt to shift left with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:168:19 in function wasm::leb_i32
+
+Check 10: wasm::leb_i32.assertion.6
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:169:9 in function wasm::leb_i32
+
+Check 11: wasm::leb_i32.assertion.7
+	 - Status: SUCCESS
+	 - Description: "attempt to shift left with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:172:27 in function wasm::leb_i32
+
+Check 12: kani::mem::cbmc::same_allocation.unsupported_construct.1
+	 - Status: SUCCESS
+	 - Description: "Kani does not support reasoning about pointer to unallocated memory"
+	 - Location: library/kani/src/lib.rs:57:1 in function kani::mem::cbmc::same_allocation
+
+Check 13: core::slice::index::slice_index_fail::do_panic::runtime.assertion.3
+	 - Status: SUCCESS
+	 - Description: "This is a placeholder message; Kani doesn't support message formatted at runtime"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:69:5 in function core::slice::index::slice_index_fail::do_panic::runtime
+
+Check 14: core::slice::index::slice_index_fail::do_panic::runtime.assertion.4
+	 - Status: SUCCESS
+	 - Description: "This is a placeholder message; Kani doesn't support message formatted at runtime"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:50:9 in function core::slice::index::slice_index_fail::do_panic::runtime
+
+Check 15: core::num::<impl usize>::checked_sub.arithmetic_overflow.1
+	 - Status: SUCCESS
+	 - Description: "attempt to compute `unchecked_sub` which would overflow"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/uint_macros.rs:1096:31 in function core::num::<impl usize>::checked_sub
+
+Check 16: wasm::leb_u32.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: crates/pg-script/src/wasm.rs:134:21 in function wasm::leb_u32
+
+Check 17: wasm::leb_u32.assertion.1
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:135:9 in function wasm::leb_u32
+
+Check 18: wasm::leb_u32.assertion.2
+	 - Status: SUCCESS
+	 - Description: "attempt to shift left with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:139:19 in function wasm::leb_u32
+
+Check 19: wasm::leb_u32.assertion.3
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:143:9 in function wasm::leb_u32
+
+Check 20: core::option::Option::<(u32, usize)>::is_some.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:633:5 in function core::option::Option::<(u32, usize)>::is_some
+
+Check 21: <core::option::Option<&u8> as core::ops::Try>::branch.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2869:15 in function <core::option::Option<&u8> as core::ops::Try>::branch
+
+Check 22: <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:405:5 in function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index
+
+Check 23: <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index.safety_check.1
+	 - Status: SUCCESS
+	 - Description: "misaligned pointer to reference cast: address must be a multiple of its type's alignment"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:411:22 in function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index
+
+Check 24: <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index.safety_check.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:411:22 in function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index
+
+Check 25: <core::option::Option<(u32, usize)> as core::ops::FromResidual<core::option::Option<core::convert::Infallible>>>::from_residual.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2883:15 in function <core::option::Option<(u32, usize)> as core::ops::FromResidual<core::option::Option<core::convert::Infallible>>>::from_residual
+
+Check 26: <usize as kani::rustc_intrinsics::ToISize>::to_isize.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: library/kani_core/src/models.rs:203:17 in function <usize as kani::rustc_intrinsics::ToISize>::to_isize
+
+Check 27: <usize as kani::rustc_intrinsics::ToISize>::to_isize.safety_check.1
+	 - Status: SUCCESS
+	 - Description: "Offset value overflows isize"
+	 - Location: library/kani/src/lib.rs:57:1 in function <usize as kani::rustc_intrinsics::ToISize>::to_isize
+
+Check 28: <usize as kani::rustc_intrinsics::ToISize>::to_isize.assertion.1
+	 - Status: SUCCESS
+	 - Description: "internal error: entered unreachable code"
+	 - Location: library/kani/src/lib.rs:57:1 in function <usize as kani::rustc_intrinsics::ToISize>::to_isize
+
+Check 29: core::slice::index::slice_index_fail::do_panic::runtime.assertion.1
+	 - Status: SUCCESS
+	 - Description: "This is a placeholder message; Kani doesn't support message formatted at runtime"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:41:9 in function core::slice::index::slice_index_fail::do_panic::runtime
+
+Check 30: core::slice::index::slice_index_fail::do_panic::runtime.assertion.2
+	 - Status: SUCCESS
+	 - Description: "This is a placeholder message; Kani doesn't support message formatted at runtime"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:59:9 in function core::slice::index::slice_index_fail::do_panic::runtime
+
+Check 31: proofs::leb_decoders_in_bounds.cover.1
+	 - Status: SATISFIED
+	 - Description: "a LEB decodes (non-vacuous)"
+	 - Location: crates/pg-script/src/proofs.rs:63:5 in function proofs::leb_decoders_in_bounds
+
+Check 32: proofs::leb_decoders_in_bounds.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: crates/pg-script/src/proofs.rs:58:1 in function proofs::leb_decoders_in_bounds
+
+Check 33: proofs::leb_decoders_in_bounds.assertion.1
+	 - Status: SUCCESS
+	 - Description: "assertion failed: np <= n && np > p"
+	 - Location: crates/pg-script/src/proofs.rs:68:9 in function proofs::leb_decoders_in_bounds
+
+Check 34: proofs::leb_decoders_in_bounds.assertion.2
+	 - Status: SUCCESS
+	 - Description: "assertion failed: np <= n && np > p"
+	 - Location: crates/pg-script/src/proofs.rs:65:9 in function proofs::leb_decoders_in_bounds
+
+Check 35: <core::option::Option<(i32, usize)> as core::ops::FromResidual<core::option::Option<core::convert::Infallible>>>::from_residual.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2883:15 in function <core::option::Option<(i32, usize)> as core::ops::FromResidual<core::option::Option<core::convert::Infallible>>>::from_residual
+
+Check 36: core::option::Option::<(u32, usize)>::is_some.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<(u32, usize)>::is_some
+
+Check 37: core::option::Option::<(u32, usize)>::is_some.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<(u32, usize)>::is_some
+
+Check 38: core::option::Option::<(u32, usize)>::is_some.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<(u32, usize)>::is_some
+
+Check 39: core::option::Option::<(u32, usize)>::is_some.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<(u32, usize)>::is_some
+
+Check 40: core::option::Option::<(u32, usize)>::is_some.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<(u32, usize)>::is_some
+
+Check 41: core::option::Option::<(u32, usize)>::is_some.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<(u32, usize)>::is_some
+
+Check 42: wasm::leb_i32.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:155:21 in function wasm::leb_i32
+
+Check 43: wasm::leb_i32.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/wasm.rs:155:20 in function wasm::leb_i32
+
+Check 44: wasm::leb_i32.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/wasm.rs:155:20 in function wasm::leb_i32
+
+Check 45: wasm::leb_i32.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/wasm.rs:155:20 in function wasm::leb_i32
+
+Check 46: wasm::leb_i32.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:155:20 in function wasm::leb_i32
+
+Check 47: wasm::leb_i32.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/wasm.rs:155:20 in function wasm::leb_i32
+
+Check 48: wasm::leb_i32.pointer_dereference.7
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/wasm.rs:155:20 in function wasm::leb_i32
+
+Check 49: wasm::leb_u32.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:134:21 in function wasm::leb_u32
+
+Check 50: wasm::leb_u32.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/wasm.rs:134:20 in function wasm::leb_u32
+
+Check 51: wasm::leb_u32.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/wasm.rs:134:20 in function wasm::leb_u32
+
+Check 52: wasm::leb_u32.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/wasm.rs:134:20 in function wasm::leb_u32
+
+Check 53: wasm::leb_u32.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:134:20 in function wasm::leb_u32
+
+Check 54: wasm::leb_u32.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/wasm.rs:134:20 in function wasm::leb_u32
+
+Check 55: wasm::leb_u32.pointer_dereference.7
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/wasm.rs:134:20 in function wasm::leb_u32
+
+Check 56: <usize as core::slice::SliceIndex<[u8]>>::get.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:188:13 in function <usize as core::slice::SliceIndex<[u8]>>::get
+
+Check 57: <core::option::Option<&u8> as core::ops::Try>::branch.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2869:15 in function <core::option::Option<&u8> as core::ops::Try>::branch
+
+Check 58: <core::option::Option<&u8> as core::ops::Try>::branch.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2871:21 in function <core::option::Option<&u8> as core::ops::Try>::branch
+
+
+SUMMARY:
+ ** 0 of 57 failed
+
+ ** 1 of 1 cover properties satisfied
+
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 1.2649266s
+
+Checking harness proofs::resolver_is_confined_to_allowlist...
+CBMC 6.11.0 (cbmc-6.11.0)
+CBMC version 6.11.0 (cbmc-6.11.0) 64-bit x86_64 linux
+Reading GOTO program from file /home/shi3z/git/qedos/target/kani/x86_64-unknown-linux-gnu/debug/build/pg-script/0dee3a1e5d2c4e84/out/pg_script-0dee3a1e5d2c4e84__RNvNtCs2efljad8yor_9pg_script6proofs33resolver_is_confined_to_allowlist.out
+Generating GOTO Program
+Adding CPROVER library (x86_64)
+Removal of function pointers and virtual functions
+Generic Property Instrumentation
+Running with 16 object bits, 48 offset bits (user-specified)
+Starting Bounded Model Checking
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 50 column 9 function core::slice::index::slice_index_fail::do_panic::runtime thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs line 2641 column 9 function core::slice::index::slice_index_fail::do_panic thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic.rs line 177 column 9 function core::slice::index::slice_index_fail thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 69 column 5 function core::slice::index::slice_index_fail::do_panic::runtime thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs line 2641 column 9 function core::slice::index::slice_index_fail::do_panic thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic.rs line 177 column 9 function core::slice::index::slice_index_fail thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 413 column 13 function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 3 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 4 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 5 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 6 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 7 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 8 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 9 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 10 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop _RNvMCskVRgFqtGIRI_16pg_script_policyNtB2_3Api9from_name.0 iteration 1 file crates/pg-script-policy/src/lib.rs line 67 column 9 function pg_script_policy::Api::from_name thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 3 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 4 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 5 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 6 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 7 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 8 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 9 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop _RNvMCskVRgFqtGIRI_16pg_script_policyNtB2_3Api9from_name.0 iteration 2 file crates/pg-script-policy/src/lib.rs line 67 column 9 function pg_script_policy::Api::from_name thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 3 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 4 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 5 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 6 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 7 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 8 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 9 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 10 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 11 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop _RNvMCskVRgFqtGIRI_16pg_script_policyNtB2_3Api9from_name.0 iteration 3 file crates/pg-script-policy/src/lib.rs line 67 column 9 function pg_script_policy::Api::from_name thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 3 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 4 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 5 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 6 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 7 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 8 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 9 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 10 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 11 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 12 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 13 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 14 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 15 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 16 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 17 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop _RNvMCskVRgFqtGIRI_16pg_script_policyNtB2_3Api9from_name.0 iteration 4 file crates/pg-script-policy/src/lib.rs line 67 column 9 function pg_script_policy::Api::from_name thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 3 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 4 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 5 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 6 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 7 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 8 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 9 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 10 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop _RNvMCskVRgFqtGIRI_16pg_script_policyNtB2_3Api9from_name.0 iteration 5 file crates/pg-script-policy/src/lib.rs line 67 column 9 function pg_script_policy::Api::from_name thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 3 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 4 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 5 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 6 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop _RNvMCskVRgFqtGIRI_16pg_script_policyNtB2_3Api9from_name.0 iteration 6 file crates/pg-script-policy/src/lib.rs line 67 column 9 function pg_script_policy::Api::from_name thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 3 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 4 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 5 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 6 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop _RNvMCskVRgFqtGIRI_16pg_script_policyNtB2_3Api9from_name.0 iteration 7 file crates/pg-script-policy/src/lib.rs line 67 column 9 function pg_script_policy::Api::from_name thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 3 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 4 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 5 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 6 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 7 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 8 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 9 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop _RNvMCskVRgFqtGIRI_16pg_script_policyNtB2_3Api9from_name.0 iteration 8 file crates/pg-script-policy/src/lib.rs line 67 column 9 function pg_script_policy::Api::from_name thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2869 column 15 function <core::option::Option<pg_script_policy::Api> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/host.rs line 190 column 19 function host::resolver::{closure#0} thread 0
+aborting path on assume(false) at file crates/pg-script-policy/src/lib.rs line 84 column 15 function pg_script_policy::Api::signature thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 633 column 5 function core::option::Option::<u8>::is_some thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 35 column 1 function proofs::resolver_is_confined_to_allowlist thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 1012 column 15 function core::option::Option::<pg_script_policy::Api>::unwrap thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 2248 column 5 function core::option::unwrap_failed thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 1014 column 21 function core::option::Option::<pg_script_policy::Api>::unwrap thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+aborting path on assume(false) at file crates/pg-script-policy/src/lib.rs line 54 column 15 function pg_script_policy::Api::name thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 50 column 9 function core::slice::index::slice_index_fail::do_panic::runtime thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs line 2641 column 9 function core::slice::index::slice_index_fail::do_panic thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic.rs line 177 column 9 function core::slice::index::slice_index_fail thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 69 column 5 function core::slice::index::slice_index_fail::do_panic::runtime thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs line 2641 column 9 function core::slice::index::slice_index_fail::do_panic thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic.rs line 177 column 9 function core::slice::index::slice_index_fail thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs line 413 column 13 function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index thread 0
+Unwinding loop memcmp.0 iteration 1 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 2 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 3 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 4 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 5 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 6 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 7 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 8 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 9 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 10 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 11 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 12 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 13 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 14 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 15 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 16 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 17 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 18 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Unwinding loop memcmp.0 iteration 19 file <builtin-library-memcmp> line 25 function memcmp thread 0
+Not unwinding loop memcmp.0 iteration 20 file <builtin-library-memcmp> line 25 function memcmp thread 0
+aborting path on assume(false) at file crates/pg-script-policy/src/lib.rs line 84 column 15 function pg_script_policy::Api::signature thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 51 column 9 function proofs::resolver_is_confined_to_allowlist thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 50 column 9 function proofs::resolver_is_confined_to_allowlist thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 49 column 9 function proofs::resolver_is_confined_to_allowlist thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 48 column 9 function proofs::resolver_is_confined_to_allowlist thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 47 column 9 function proofs::resolver_is_confined_to_allowlist thread 0
+Runtime Symex: 0.435539s
+size of program expression: 11227 steps
+slicing removed 7229 assignments
+Generated 1549 VCC(s), 148 remaining after simplification
+Runtime Postprocess Equation: 0.00483204s
+Passing problem to propositional reduction
+converting SSA
+Runtime Convert SSA: 0.0505757s
+Running propositional reduction
+Post-processing
+Runtime Post-process: 0.0149508s
+Solving with CaDiCaL 3.0.0
+35821 variables, 102539 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.0213511s
+Runtime decision procedure: 0.073381s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+35822 variables, 102540 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.00966993s
+Runtime decision procedure: 0.0101664s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+35823 variables, 102541 clauses
+SAT checker: instance is UNSATISFIABLE
+Runtime Solver: 0.0247064s
+Runtime decision procedure: 0.0250382s
+
+RESULTS:
+Check 1: <core::option::Option<pg_script_policy::Api> as core::ops::Try>::branch.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2869:15 in function <core::option::Option<pg_script_policy::Api> as core::ops::Try>::branch
+
+Check 2: pg_script_policy::Api::signature.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: crates/pg-script-policy/src/lib.rs:84:15 in function pg_script_policy::Api::signature
+
+Check 3: proofs::resolver_is_confined_to_allowlist.assertion.1
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/proofs.rs:41:44 in function proofs::resolver_is_confined_to_allowlist
+
+Check 4: proofs::resolver_is_confined_to_allowlist.assertion.2
+	 - Status: SUCCESS
+	 - Description: "attempt to shift left with overflow"
+	 - Location: crates/pg-script/src/proofs.rs:41:36 in function proofs::resolver_is_confined_to_allowlist
+
+Check 5: proofs::resolver_is_confined_to_allowlist.cover.1
+	 - Status: SATISFIED
+	 - Description: "an allowed import does link (non-vacuous)"
+	 - Location: crates/pg-script/src/proofs.rs:44:5 in function proofs::resolver_is_confined_to_allowlist
+
+Check 6: proofs::resolver_is_confined_to_allowlist.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: crates/pg-script/src/proofs.rs:35:1 in function proofs::resolver_is_confined_to_allowlist
+
+Check 7: proofs::resolver_is_confined_to_allowlist.assertion.3
+	 - Status: SUCCESS
+	 - Description: "assertion failed: matches!(api, Api::RespWrite)"
+	 - Location: crates/pg-script/src/proofs.rs:51:9 in function proofs::resolver_is_confined_to_allowlist
+
+Check 8: proofs::resolver_is_confined_to_allowlist.assertion.4
+	 - Status: SUCCESS
+	 - Description: "assertion failed: api.signature() == (np, nr)"
+	 - Location: crates/pg-script/src/proofs.rs:50:9 in function proofs::resolver_is_confined_to_allowlist
+
+Check 9: proofs::resolver_is_confined_to_allowlist.assertion.5
+	 - Status: SUCCESS
+	 - Description: "assertion failed: policy.allows(api)"
+	 - Location: crates/pg-script/src/proofs.rs:49:9 in function proofs::resolver_is_confined_to_allowlist
+
+Check 10: proofs::resolver_is_confined_to_allowlist.assertion.6
+	 - Status: SUCCESS
+	 - Description: "assertion failed: api.name() == &name[..nlen]"
+	 - Location: crates/pg-script/src/proofs.rs:48:9 in function proofs::resolver_is_confined_to_allowlist
+
+Check 11: proofs::resolver_is_confined_to_allowlist.assertion.7
+	 - Status: SUCCESS
+	 - Description: "assertion failed: &module == b"qs""
+	 - Location: crates/pg-script/src/proofs.rs:47:9 in function proofs::resolver_is_confined_to_allowlist
+
+Check 12: <core::option::Option<u8> as core::ops::FromResidual<core::option::Option<core::convert::Infallible>>>::from_residual.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2883:15 in function <core::option::Option<u8> as core::ops::FromResidual<core::option::Option<core::convert::Infallible>>>::from_residual
+
+Check 13: memcmp.precondition.1
+	 - Status: SUCCESS
+	 - Description: "memcmp region 1 readable"
+	 - Location: <builtin-library-memcmp>:19 in function memcmp
+
+Check 14: memcmp.precondition.2
+	 - Status: SUCCESS
+	 - Description: "memcpy region 2 readable"
+	 - Location: <builtin-library-memcmp>:21 in function memcmp
+
+Check 15: <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:405:5 in function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index
+
+Check 16: <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index.safety_check.1
+	 - Status: SUCCESS
+	 - Description: "misaligned pointer to reference cast: address must be a multiple of its type's alignment"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:411:22 in function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index
+
+Check 17: <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index.safety_check.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:411:22 in function <core::ops::Range<usize> as core::slice::SliceIndex<[u8]>>::index
+
+Check 18: pg_script_policy::Api::name.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: crates/pg-script-policy/src/lib.rs:54:15 in function pg_script_policy::Api::name
+
+Check 19: pg_script_policy::Api::from_name.assertion.1
+	 - Status: SUCCESS
+	 - Description: "index out of bounds: the length is less than or equal to the given index"
+	 - Location: crates/pg-script-policy/src/lib.rs:68:16 in function pg_script_policy::Api::from_name
+
+Check 20: pg_script_policy::Api::from_name.assertion.2
+	 - Status: SUCCESS
+	 - Description: "index out of bounds: the length is less than or equal to the given index"
+	 - Location: crates/pg-script-policy/src/lib.rs:69:29 in function pg_script_policy::Api::from_name
+
+Check 21: pg_script_policy::Api::from_name.assertion.3
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script-policy/src/lib.rs:71:13 in function pg_script_policy::Api::from_name
+
+Check 22: pg_script_policy::Api::from_id.assertion.1
+	 - Status: SUCCESS
+	 - Description: "index out of bounds: the length is less than or equal to the given index"
+	 - Location: crates/pg-script-policy/src/lib.rs:77:18 in function pg_script_policy::Api::from_id
+
+Check 23: core::slice::<impl [u8]>::as_array::<2>.safety_check.1
+	 - Status: SUCCESS
+	 - Description: "misaligned pointer to reference cast: address must be a multiple of its type's alignment"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:858:31 in function core::slice::<impl [u8]>::as_array::<2>
+
+Check 24: core::slice::<impl [u8]>::as_array::<2>.safety_check.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:858:31 in function core::slice::<impl [u8]>::as_array::<2>
+
+Check 25: core::slice::index::slice_index_fail::do_panic::runtime.assertion.2
+	 - Status: SUCCESS
+	 - Description: "This is a placeholder message; Kani doesn't support message formatted at runtime"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:59:9 in function core::slice::index::slice_index_fail::do_panic::runtime
+
+Check 26: core::slice::index::slice_index_fail::do_panic::runtime.assertion.1
+	 - Status: SUCCESS
+	 - Description: "This is a placeholder message; Kani doesn't support message formatted at runtime"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:41:9 in function core::slice::index::slice_index_fail::do_panic::runtime
+
+Check 27: kani::mem::cbmc::same_allocation.unsupported_construct.1
+	 - Status: SUCCESS
+	 - Description: "Kani does not support reasoning about pointer to unallocated memory"
+	 - Location: library/kani/src/lib.rs:57:1 in function kani::mem::cbmc::same_allocation
+
+Check 28: <usize as kani::rustc_intrinsics::ToISize>::to_isize.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: library/kani_core/src/models.rs:203:17 in function <usize as kani::rustc_intrinsics::ToISize>::to_isize
+
+Check 29: <usize as kani::rustc_intrinsics::ToISize>::to_isize.safety_check.1
+	 - Status: SUCCESS
+	 - Description: "Offset value overflows isize"
+	 - Location: library/kani/src/lib.rs:57:1 in function <usize as kani::rustc_intrinsics::ToISize>::to_isize
+
+Check 30: <usize as kani::rustc_intrinsics::ToISize>::to_isize.assertion.1
+	 - Status: SUCCESS
+	 - Description: "internal error: entered unreachable code"
+	 - Location: library/kani/src/lib.rs:57:1 in function <usize as kani::rustc_intrinsics::ToISize>::to_isize
+
+Check 31: core::option::Option::<pg_script_policy::Api>::unwrap.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:1012:15 in function core::option::Option::<pg_script_policy::Api>::unwrap
+
+Check 32: core::array::equality::<impl core::cmp::PartialEq<[u8; 2]> for [u8]>::ne.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/array/equality.rs:56:15 in function core::array::equality::<impl core::cmp::PartialEq<[u8; 2]> for [u8]>::ne
+
+Check 33: host::resolver::{closure#0}.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: crates/pg-script/src/host.rs:190:19 in function host::resolver::{closure#0}
+
+Check 34: core::slice::index::slice_index_fail::do_panic::runtime.assertion.3
+	 - Status: SUCCESS
+	 - Description: "This is a placeholder message; Kani doesn't support message formatted at runtime"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:69:5 in function core::slice::index::slice_index_fail::do_panic::runtime
+
+Check 35: core::option::Option::<u8>::is_some.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:633:5 in function core::option::Option::<u8>::is_some
+
+Check 36: pg_script_policy::Policy::<'_>::allows.assertion.1
+	 - Status: SUCCESS
+	 - Description: "attempt to shift left with overflow"
+	 - Location: crates/pg-script-policy/src/lib.rs:227:22 in function pg_script_policy::Policy::<'_>::allows
+
+Check 37: core::num::<impl usize>::checked_sub.arithmetic_overflow.1
+	 - Status: SUCCESS
+	 - Description: "attempt to compute `unchecked_sub` which would overflow"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/uint_macros.rs:1096:31 in function core::num::<impl usize>::checked_sub
+
+Check 38: kani::rustc_intrinsics::offset::<u8, *const u8, usize>.safety_check.1
+	 - Status: SUCCESS
+	 - Description: "Offset in bytes overflows isize"
+	 - Location: library/kani/src/lib.rs:57:1 in function kani::rustc_intrinsics::offset::<u8, *const u8, usize>
+
+Check 39: kani::rustc_intrinsics::offset::<u8, *const u8, usize>.safety_check.2
+	 - Status: SUCCESS
+	 - Description: "Offset result address must equal original pointer address plus offset"
+	 - Location: library/kani/src/lib.rs:57:1 in function kani::rustc_intrinsics::offset::<u8, *const u8, usize>
+
+Check 40: kani::rustc_intrinsics::offset::<u8, *const u8, usize>.safety_check.3
+	 - Status: SUCCESS
+	 - Description: "Offset result and original pointer must point to the same allocation"
+	 - Location: library/kani/src/lib.rs:57:1 in function kani::rustc_intrinsics::offset::<u8, *const u8, usize>
+
+Check 41: <u8 as core::slice::cmp::SlicePartialEq<u8>>::equal_same_length.arithmetic_overflow.1
+	 - Status: SUCCESS
+	 - Description: "attempt to compute `unchecked_mul` which would overflow"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/cmp.rs:156:24 in function <u8 as core::slice::cmp::SlicePartialEq<u8>>::equal_same_length
+
+Check 42: core::option::unwrap_failed.assertion.1
+	 - Status: SUCCESS
+	 - Description: "called `Option::unwrap()` on a `None` value"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2248:5 in function core::option::unwrap_failed
+
+Check 43: core::slice::index::slice_index_fail::do_panic::runtime.assertion.4
+	 - Status: SUCCESS
+	 - Description: "This is a placeholder message; Kani doesn't support message formatted at runtime"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:50:9 in function core::slice::index::slice_index_fail::do_panic::runtime
+
+Check 44: core::slice::<impl [u8]>::as_array::<2>.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:861:13 in function core::slice::<impl [u8]>::as_array::<2>
+
+Check 45: host::resolver::{closure#0}.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/host.rs:190:19 in function host::resolver::{closure#0}
+
+Check 46: host::resolver::{closure#0}.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/host.rs:191:13 in function host::resolver::{closure#0}
+
+Check 47: host::resolver::{closure#0}.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/host.rs:191:13 in function host::resolver::{closure#0}
+
+Check 48: host::resolver::{closure#0}.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/host.rs:191:13 in function host::resolver::{closure#0}
+
+Check 49: host::resolver::{closure#0}.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/host.rs:191:13 in function host::resolver::{closure#0}
+
+Check 50: host::resolver::{closure#0}.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/host.rs:191:13 in function host::resolver::{closure#0}
+
+Check 51: host::resolver::{closure#0}.pointer_dereference.7
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/host.rs:191:13 in function host::resolver::{closure#0}
+
+Check 52: pg_script_policy::Api::from_id.array_bounds.1
+	 - Status: SUCCESS
+	 - Description: "index out of bounds: the length is less than or equal to the given index"
+	 - Location: crates/pg-script-policy/src/lib.rs:77:18 in function pg_script_policy::Api::from_id
+
+Check 53: pg_script_policy::Api::from_id.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script-policy/src/lib.rs:79:13 in function pg_script_policy::Api::from_id
+
+Check 54: pg_script_policy::Api::from_name.array_bounds.1
+	 - Status: SUCCESS
+	 - Description: "index out of bounds: the length is less than or equal to the given index"
+	 - Location: crates/pg-script-policy/src/lib.rs:68:16 in function pg_script_policy::Api::from_name
+
+Check 55: pg_script_policy::Api::from_name.array_bounds.2
+	 - Status: SUCCESS
+	 - Description: "index out of bounds: the length is less than or equal to the given index"
+	 - Location: crates/pg-script-policy/src/lib.rs:69:29 in function pg_script_policy::Api::from_name
+
+Check 56: pg_script_policy::Api::from_name.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script-policy/src/lib.rs:73:9 in function pg_script_policy::Api::from_name
+
+Check 57: core::option::Option::<pg_script_policy::Api>::unwrap.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:1012:15 in function core::option::Option::<pg_script_policy::Api>::unwrap
+
+Check 58: core::option::Option::<u8>::is_some.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<u8>::is_some
+
+Check 59: core::option::Option::<u8>::is_some.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<u8>::is_some
+
+Check 60: core::option::Option::<u8>::is_some.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<u8>::is_some
+
+Check 61: core::option::Option::<u8>::is_some.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<u8>::is_some
+
+Check 62: core::option::Option::<u8>::is_some.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<u8>::is_some
+
+Check 63: core::option::Option::<u8>::is_some.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:634:18 in function core::option::Option::<u8>::is_some
+
+Check 64: pg_script_policy::Policy::<'_>::allows.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script-policy/src/lib.rs:227:9 in function pg_script_policy::Policy::<'_>::allows
+
+Check 65: pg_script_policy::Policy::<'_>::allows.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script-policy/src/lib.rs:227:9 in function pg_script_policy::Policy::<'_>::allows
+
+Check 66: pg_script_policy::Policy::<'_>::allows.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script-policy/src/lib.rs:227:9 in function pg_script_policy::Policy::<'_>::allows
+
+Check 67: pg_script_policy::Policy::<'_>::allows.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script-policy/src/lib.rs:227:9 in function pg_script_policy::Policy::<'_>::allows
+
+Check 68: pg_script_policy::Policy::<'_>::allows.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script-policy/src/lib.rs:227:9 in function pg_script_policy::Policy::<'_>::allows
+
+Check 69: pg_script_policy::Policy::<'_>::allows.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script-policy/src/lib.rs:227:9 in function pg_script_policy::Policy::<'_>::allows
+
+Check 70: core::array::equality::<impl core::cmp::PartialEq<[u8; 2]> for [u8]>::ne.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/array/equality.rs:56:15 in function core::array::equality::<impl core::cmp::PartialEq<[u8; 2]> for [u8]>::ne
+
+Check 71: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 72: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 73: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 74: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 75: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 76: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 77: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.7
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 78: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.8
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 79: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.9
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 80: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.10
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 81: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.11
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 82: core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq.pointer_dereference.12
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8; 2]>::eq
+
+Check 83: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:27 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 84: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:27 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 85: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:27 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 86: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:27 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 87: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:27 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 88: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:27 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 89: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.7
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:34 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 90: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.8
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:34 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 91: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.9
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:34 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 92: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.10
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:34 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 93: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.11
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:34 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 94: core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne.pointer_dereference.12
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2403:34 in function core::cmp::impls::<impl core::cmp::PartialEq<&[u8; 2]> for &[u8]>::ne
+
+Check 95: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 96: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 97: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 98: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 99: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 100: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:27 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 101: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.7
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 102: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.8
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 103: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.9
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 104: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.10
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 105: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.11
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 106: core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq.pointer_dereference.12
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2399:34 in function core::cmp::impls::<impl core::cmp::PartialEq for &[u8]>::eq
+
+Check 107: <core::option::Option<pg_script_policy::Api> as core::ops::Try>::branch.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2869:15 in function <core::option::Option<pg_script_policy::Api> as core::ops::Try>::branch
+
+Check 108: <core::option::Option<pg_script_policy::Api> as core::ops::Try>::branch.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2871:21 in function <core::option::Option<pg_script_policy::Api> as core::ops::Try>::branch
+
+Check 109: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:54 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 110: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:54 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 111: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:54 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 112: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:54 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 113: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:54 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 114: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:54 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 115: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.7
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:63 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 116: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.8
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:63 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 117: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.9
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:63 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 118: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.10
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:63 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 119: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.11
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:63 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 120: core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq.pointer_dereference.12
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:2153:63 in function core::cmp::impls::<impl core::cmp::PartialEq for u8>::eq
+
+Check 121: memcmp.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 122: memcmp.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 123: memcmp.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 124: memcmp.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 125: memcmp.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 126: memcmp.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 127: memcmp.pointer_dereference.7
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 128: memcmp.pointer_dereference.8
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 129: memcmp.pointer_dereference.9
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 130: memcmp.pointer_dereference.10
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 131: memcmp.pointer_dereference.11
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 132: memcmp.pointer_dereference.12
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: <builtin-library-memcmp>:27 in function memcmp
+
+Check 133: memcmp.unwind.0
+	 - Status: SUCCESS
+	 - Description: "unwinding assertion loop 0"
+	 - Location: <builtin-library-memcmp>:25 in function memcmp
+
+
+SUMMARY:
+ ** 0 of 132 failed
+
+ ** 1 of 1 cover properties satisfied
+
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 0.9779387s
+
+Checking harness proofs::memory_access_never_panics...
+CBMC 6.11.0 (cbmc-6.11.0)
+CBMC version 6.11.0 (cbmc-6.11.0) 64-bit x86_64 linux
+Reading GOTO program from file /home/shi3z/git/qedos/target/kani/x86_64-unknown-linux-gnu/debug/build/pg-script/0dee3a1e5d2c4e84/out/pg_script-0dee3a1e5d2c4e84__RNvNtCs2efljad8yor_9pg_script6proofs26memory_access_never_panics.out
+Generating GOTO Program
+Adding CPROVER library (x86_64)
+Removal of function pointers and virtual functions
+Generic Property Instrumentation
+Running with 16 object bits, 48 offset bits (user-specified)
+Starting Bounded Model Checking
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 1334 column 15 function core::option::Option::<usize>::ok_or::<wasm::Trap> thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs line 2177 column 15 function <core::result::Result<usize, wasm::Trap> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 628 column 17 function wasm::Memory::<'_>::load thread 0
+Unwinding loop _RNvMs0_NtCs2efljad8yor_9pg_script4wasmNtB5_6Memory4load.0 iteration 1 file crates/pg-script/src/wasm.rs line 631 column 9 function wasm::Memory::<'_>::load thread 0
+Unwinding loop _RNvMs0_NtCs2efljad8yor_9pg_script4wasmNtB5_6Memory4load.0 iteration 2 file crates/pg-script/src/wasm.rs line 631 column 9 function wasm::Memory::<'_>::load thread 0
+Unwinding loop _RNvMs0_NtCs2efljad8yor_9pg_script4wasmNtB5_6Memory4load.0 iteration 3 file crates/pg-script/src/wasm.rs line 631 column 9 function wasm::Memory::<'_>::load thread 0
+Unwinding loop _RNvMs0_NtCs2efljad8yor_9pg_script4wasmNtB5_6Memory4load.0 iteration 4 file crates/pg-script/src/wasm.rs line 631 column 9 function wasm::Memory::<'_>::load thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs line 1334 column 15 function core::option::Option::<usize>::ok_or::<wasm::Trap> thread 0
+aborting path on assume(false) at file /home/runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs line 2177 column 15 function <core::result::Result<usize, wasm::Trap> as core::ops::Try>::branch thread 0
+aborting path on assume(false) at file crates/pg-script/src/wasm.rs line 638 column 17 function wasm::Memory::<'_>::store thread 0
+Unwinding loop _RNvMs0_NtCs2efljad8yor_9pg_script4wasmNtB5_6Memory5store.0 iteration 1 file crates/pg-script/src/wasm.rs line 640 column 9 function wasm::Memory::<'_>::store thread 0
+Unwinding loop _RNvMs0_NtCs2efljad8yor_9pg_script4wasmNtB5_6Memory5store.0 iteration 2 file crates/pg-script/src/wasm.rs line 640 column 9 function wasm::Memory::<'_>::store thread 0
+Unwinding loop _RNvMs0_NtCs2efljad8yor_9pg_script4wasmNtB5_6Memory5store.0 iteration 3 file crates/pg-script/src/wasm.rs line 640 column 9 function wasm::Memory::<'_>::store thread 0
+Unwinding loop _RNvMs0_NtCs2efljad8yor_9pg_script4wasmNtB5_6Memory5store.0 iteration 4 file crates/pg-script/src/wasm.rs line 640 column 9 function wasm::Memory::<'_>::store thread 0
+Runtime Symex: 0.0827895s
+size of program expression: 2323 steps
+slicing removed 1699 assignments
+Generated 281 VCC(s), 87 remaining after simplification
+Runtime Postprocess Equation: 0.000469768s
+Passing problem to propositional reduction
+converting SSA
+Runtime Convert SSA: 0.00660642s
+Running propositional reduction
+Post-processing
+Runtime Post-process: 8.542e-06s
+Solving with CaDiCaL 3.0.0
+6592 variables, 16507 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.000475294s
+Runtime decision procedure: 0.0073388s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+6593 variables, 16508 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.00342746s
+Runtime decision procedure: 0.00351714s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+6594 variables, 16509 clauses
+SAT checker: instance is UNSATISFIABLE
+Runtime Solver: 0.00688407s
+Runtime decision procedure: 0.00694233s
+
+RESULTS:
+Check 1: <core::result::Result<usize, wasm::Trap> as core::ops::Try>::branch.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:2177:15 in function <core::result::Result<usize, wasm::Trap> as core::ops::Try>::branch
+
+Check 2: <core::result::Result<(), wasm::Trap> as core::ops::FromResidual<core::result::Result<core::convert::Infallible, wasm::Trap>>>::from_residual.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:2192:15 in function <core::result::Result<(), wasm::Trap> as core::ops::FromResidual<core::result::Result<core::convert::Infallible, wasm::Trap>>>::from_residual
+
+Check 3: wasm::Memory::<'_>::load.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: crates/pg-script/src/wasm.rs:628:17 in function wasm::Memory::<'_>::load
+
+Check 4: wasm::Memory::<'_>::load.assertion.1
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:632:30 in function wasm::Memory::<'_>::load
+
+Check 5: wasm::Memory::<'_>::load.assertion.2
+	 - Status: SUCCESS
+	 - Description: "index out of bounds: the length is less than or equal to the given index"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 6: wasm::Memory::<'_>::load.assertion.3
+	 - Status: SUCCESS
+	 - Description: "attempt to multiply with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:632:48 in function wasm::Memory::<'_>::load
+
+Check 7: wasm::Memory::<'_>::load.assertion.4
+	 - Status: SUCCESS
+	 - Description: "attempt to shift left with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:632:18 in function wasm::Memory::<'_>::load
+
+Check 8: wasm::Memory::<'_>::load.assertion.5
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:633:13 in function wasm::Memory::<'_>::load
+
+Check 9: wasm::checked_range.assertion.1
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:598:17 in function wasm::checked_range
+
+Check 10: wasm::checked_range.assertion.2
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:599:15 in function wasm::checked_range
+
+Check 11: wasm::Memory::<'_>::store.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: crates/pg-script/src/wasm.rs:638:17 in function wasm::Memory::<'_>::store
+
+Check 12: wasm::Memory::<'_>::store.assertion.1
+	 - Status: SUCCESS
+	 - Description: "attempt to multiply with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:641:41 in function wasm::Memory::<'_>::store
+
+Check 13: wasm::Memory::<'_>::store.assertion.2
+	 - Status: SUCCESS
+	 - Description: "attempt to shift right with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:641:33 in function wasm::Memory::<'_>::store
+
+Check 14: wasm::Memory::<'_>::store.assertion.3
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:641:24 in function wasm::Memory::<'_>::store
+
+Check 15: wasm::Memory::<'_>::store.assertion.4
+	 - Status: SUCCESS
+	 - Description: "index out of bounds: the length is less than or equal to the given index"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 16: wasm::Memory::<'_>::store.assertion.5
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:642:13 in function wasm::Memory::<'_>::store
+
+Check 17: core::option::Option::<usize>::ok_or::<wasm::Trap>.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:1334:15 in function core::option::Option::<usize>::ok_or::<wasm::Trap>
+
+Check 18: <core::result::Result<u32, wasm::Trap> as core::ops::FromResidual<core::result::Result<core::convert::Infallible, wasm::Trap>>>::from_residual.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: ../../../runner/.rustup/toolchains/nightly-2026-08-21-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:2192:15 in function <core::result::Result<u32, wasm::Trap> as core::ops::FromResidual<core::result::Result<core::convert::Infallible, wasm::Trap>>>::from_residual
+
+Check 19: wasm::Memory::<'_>::load.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/wasm.rs:628:31 in function wasm::Memory::<'_>::load
+
+Check 20: wasm::Memory::<'_>::load.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/wasm.rs:628:31 in function wasm::Memory::<'_>::load
+
+Check 21: wasm::Memory::<'_>::load.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/wasm.rs:628:31 in function wasm::Memory::<'_>::load
+
+Check 22: wasm::Memory::<'_>::load.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:628:31 in function wasm::Memory::<'_>::load
+
+Check 23: wasm::Memory::<'_>::load.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/wasm.rs:628:31 in function wasm::Memory::<'_>::load
+
+Check 24: wasm::Memory::<'_>::load.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/wasm.rs:628:31 in function wasm::Memory::<'_>::load
+
+Check 25: wasm::Memory::<'_>::load.pointer_dereference.7
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 26: wasm::Memory::<'_>::load.pointer_dereference.8
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 27: wasm::Memory::<'_>::load.pointer_dereference.9
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 28: wasm::Memory::<'_>::load.pointer_dereference.10
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 29: wasm::Memory::<'_>::load.pointer_dereference.11
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 30: wasm::Memory::<'_>::load.pointer_dereference.12
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 31: wasm::Memory::<'_>::load.pointer_dereference.13
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 32: wasm::Memory::<'_>::load.pointer_dereference.14
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 33: wasm::Memory::<'_>::load.pointer_dereference.15
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 34: wasm::Memory::<'_>::load.pointer_dereference.16
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 35: wasm::Memory::<'_>::load.pointer_dereference.17
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 36: wasm::Memory::<'_>::load.pointer_dereference.18
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 37: wasm::Memory::<'_>::load.pointer_dereference.19
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 38: wasm::Memory::<'_>::load.pointer_dereference.20
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 39: wasm::Memory::<'_>::load.pointer_dereference.21
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 40: wasm::Memory::<'_>::load.pointer_dereference.22
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 41: wasm::Memory::<'_>::load.pointer_dereference.23
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 42: wasm::Memory::<'_>::load.pointer_dereference.24
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/wasm.rs:632:19 in function wasm::Memory::<'_>::load
+
+Check 43: wasm::Memory::<'_>::store.pointer_dereference.1
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/wasm.rs:638:31 in function wasm::Memory::<'_>::store
+
+Check 44: wasm::Memory::<'_>::store.pointer_dereference.2
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/wasm.rs:638:31 in function wasm::Memory::<'_>::store
+
+Check 45: wasm::Memory::<'_>::store.pointer_dereference.3
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/wasm.rs:638:31 in function wasm::Memory::<'_>::store
+
+Check 46: wasm::Memory::<'_>::store.pointer_dereference.4
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:638:31 in function wasm::Memory::<'_>::store
+
+Check 47: wasm::Memory::<'_>::store.pointer_dereference.5
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/wasm.rs:638:31 in function wasm::Memory::<'_>::store
+
+Check 48: wasm::Memory::<'_>::store.pointer_dereference.6
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/wasm.rs:638:31 in function wasm::Memory::<'_>::store
+
+Check 49: wasm::Memory::<'_>::store.pointer_dereference.7
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 50: wasm::Memory::<'_>::store.pointer_dereference.8
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 51: wasm::Memory::<'_>::store.pointer_dereference.9
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 52: wasm::Memory::<'_>::store.pointer_dereference.10
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 53: wasm::Memory::<'_>::store.pointer_dereference.11
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 54: wasm::Memory::<'_>::store.pointer_dereference.12
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 55: wasm::Memory::<'_>::store.pointer_dereference.13
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 56: wasm::Memory::<'_>::store.pointer_dereference.14
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 57: wasm::Memory::<'_>::store.pointer_dereference.15
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 58: wasm::Memory::<'_>::store.pointer_dereference.16
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 59: wasm::Memory::<'_>::store.pointer_dereference.17
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 60: wasm::Memory::<'_>::store.pointer_dereference.18
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 61: wasm::Memory::<'_>::store.pointer_dereference.19
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer NULL"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 62: wasm::Memory::<'_>::store.pointer_dereference.20
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer invalid"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 63: wasm::Memory::<'_>::store.pointer_dereference.21
+	 - Status: SUCCESS
+	 - Description: "dereference failure: deallocated dynamic object"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 64: wasm::Memory::<'_>::store.pointer_dereference.22
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 65: wasm::Memory::<'_>::store.pointer_dereference.23
+	 - Status: SUCCESS
+	 - Description: "dereference failure: pointer outside object bounds"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 66: wasm::Memory::<'_>::store.pointer_dereference.24
+	 - Status: SUCCESS
+	 - Description: "dereference failure: invalid integer address"
+	 - Location: crates/pg-script/src/wasm.rs:641:13 in function wasm::Memory::<'_>::store
+
+Check 67: wasm::Memory::<'_>::store.pointer_dereference.25
+	 - Status: SUCCESS
+	 - Description: "dereference failure: dead object"
+	 - Location: crates/pg-script/src/wasm.rs:644:9 in function wasm::Memory::<'_>::store
+
+
+SUMMARY:
+ ** 0 of 67 failed
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 0.22236s
+
+Checking harness proofs::checked_range_sound...
+CBMC 6.11.0 (cbmc-6.11.0)
+CBMC version 6.11.0 (cbmc-6.11.0) 64-bit x86_64 linux
+Reading GOTO program from file /home/shi3z/git/qedos/target/kani/x86_64-unknown-linux-gnu/debug/build/pg-script/0dee3a1e5d2c4e84/out/pg_script-0dee3a1e5d2c4e84__RNvNtCs2efljad8yor_9pg_script6proofs19checked_range_sound.out
+Generating GOTO Program
+Adding CPROVER library (x86_64)
+Removal of function pointers and virtual functions
+Generic Property Instrumentation
+Running with 16 object bits, 48 offset bits (user-specified)
+Starting Bounded Model Checking
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 11 column 1 function proofs::checked_range_sound thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 15 column 9 function proofs::checked_range_sound thread 0
+aborting path on assume(false) at file crates/pg-script/src/proofs.rs line 14 column 9 function proofs::checked_range_sound thread 0
+Runtime Symex: 0.0170248s
+size of program expression: 522 steps
+slicing removed 239 assignments
+Generated 11 VCC(s), 11 remaining after simplification
+Runtime Postprocess Equation: 0.000168152s
+Passing problem to propositional reduction
+converting SSA
+Runtime Convert SSA: 0.00314326s
+Running propositional reduction
+Post-processing
+Runtime Post-process: 1.1457e-05s
+Solving with CaDiCaL 3.0.0
+968 variables, 3284 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.00025851s
+Runtime decision procedure: 0.00354494s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+969 variables, 3285 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.000252378s
+Runtime decision procedure: 0.000316325s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+970 variables, 3286 clauses
+SAT checker: instance is UNSATISFIABLE
+Runtime Solver: 0.0355208s
+Runtime decision procedure: 0.0355706s
+
+RESULTS:
+Check 1: proofs::checked_range_sound.unreachable.1
+	 - Status: SUCCESS
+	 - Description: "unreachable code"
+	 - Location: crates/pg-script/src/proofs.rs:11:1 in function proofs::checked_range_sound
+
+Check 2: proofs::checked_range_sound.assertion.1
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/proofs.rs:14:29 in function proofs::checked_range_sound
+
+Check 3: proofs::checked_range_sound.assertion.2
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/proofs.rs:15:17 in function proofs::checked_range_sound
+
+Check 4: proofs::checked_range_sound.assertion.3
+	 - Status: SUCCESS
+	 - Description: "assertion failed: s as u64 + size as u64 <= len as u64"
+	 - Location: crates/pg-script/src/proofs.rs:15:9 in function proofs::checked_range_sound
+
+Check 5: proofs::checked_range_sound.assertion.4
+	 - Status: SUCCESS
+	 - Description: "assertion failed: s as u64 == base as u64 + off as u64"
+	 - Location: crates/pg-script/src/proofs.rs:14:9 in function proofs::checked_range_sound
+
+Check 6: wasm::checked_range.assertion.1
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:598:17 in function wasm::checked_range
+
+Check 7: wasm::checked_range.assertion.2
+	 - Status: SUCCESS
+	 - Description: "attempt to add with overflow"
+	 - Location: crates/pg-script/src/wasm.rs:599:15 in function wasm::checked_range
+
+
+SUMMARY:
+ ** 0 of 7 failed
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 0.11264064s
+
+Manual Harness Summary:
+Complete - 4 successfully verified harnesses, 0 failures, 4 total.

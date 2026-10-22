@@ -12,6 +12,7 @@
 /build/*
 !/build/kani/
 !/build/perf/
+!/build/script/
 !/build/sel4/
 /build/sel4/*
 !/build/sel4/proofgate.system
@@ -28,3 +29,5 @@
 # Python cache
 __pycache__/
 *.pyc
+/examples/malicious/out/
+/sel4/rust_script/target/

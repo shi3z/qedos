@@ -10,6 +10,9 @@
  *   - VADDR_SHM_CONN_HTTP   (0x35000000): mapped ONLY in connector_pd and http_pd
  *   - VADDR_SHM_TCP_CONN    (0x36000000): mapped ONLY in connector_pd and tcp_pd
  *   - VADDR_TLS_KEYSTORE    (0x37000000): mapped ONLY in tls_pd (perms="r", LAW_008)
+ *   QED Script (only present in images built with QEDOS_SCRIPT=1):
+ *   - VADDR_SHM_POLICY_SCRIPT (0x38000000): mapped ONLY in policy_pd and script_pd
+ *   - VADDR_SHM_SCRIPT_HTTP   (0x39000000): mapped ONLY in script_pd and http_pd
  */
 #ifndef PROOFGATE_SEL4_PG_SHM_H
 #define PROOFGATE_SEL4_PG_SHM_H
@@ -24,6 +27,8 @@
 #define VADDR_SHM_CONN_HTTP   0x35000000ULL
 #define VADDR_SHM_TCP_CONN    0x36000000ULL
 #define VADDR_TLS_KEYSTORE    0x37000000ULL
+#define VADDR_SHM_POLICY_SCRIPT 0x38000000ULL
+#define VADDR_SHM_SCRIPT_HTTP   0x39000000ULL
 
 #define PG_MAX_CONNS    4u
 #define PG_RING_SIZE    16384u
@@ -103,6 +108,7 @@ typedef struct {
 #define PG_DECISION_REJECT  0u
 #define PG_DECISION_HEALTH  1u
 #define PG_DECISION_FORWARD 2u
+#define PG_DECISION_SCRIPT  3u /* QED Script dispatch (QEDOS_SCRIPT builds only) */
 
 typedef struct {
     volatile uint32_t req_seq;       /* Incremented by http_pd when a request is ready */
@@ -186,5 +192,40 @@ typedef struct {
     uint8_t           tx_buf[PG_MAX_REQ_RAW + 1024u];
     uint8_t           rx_buf[PG_MAX_RESP_RAW];
 } pg_shm_tcp_conn_t;
+
+/* =========================================================================
+ * 7. QED Script (QEDOS_SCRIPT=1 images only)
+ *    shm_policy_script: approved script request (policy_pd -> script_pd)
+ *    shm_script_http:   script result            (script_pd -> http_pd)
+ *    script_pd has NO other shared memory, NO timer/IRQ/ioport/TCB caps, and exactly two channels.
+ * ========================================================================= */
+#define PG_SCRIPT_BODY_MAX 16384u
+
+typedef struct {
+    volatile uint32_t req_seq;   /* policy_pd increments when a script request is ready */
+    volatile uint32_t ack_seq;   /* script_pd sets to req_seq when the request has been consumed */
+    volatile uint8_t  slot;
+    volatile uint8_t  method;
+    volatile uint8_t  keep_alive;
+    uint8_t           _pad0;
+    volatile uint16_t target_len;
+    uint16_t          _pad1;
+    volatile uint32_t body_len;
+    uint8_t           target[PG_MAX_TARGET];
+    uint8_t           body[PG_MAX_REQ_RAW];
+} pg_shm_policy_script_t;
+
+typedef struct {
+    volatile uint32_t resp_seq;  /* script_pd increments when a result is ready */
+    volatile uint32_t resp_ack;  /* http_pd sets to resp_seq once copied out */
+    volatile uint8_t  slot;
+    volatile uint8_t  keep_alive;
+    volatile uint8_t  ctype;     /* 0 json, 1 html, 2 text */
+    uint8_t           _pad0;
+    volatile uint16_t status;
+    uint16_t          _pad1;
+    volatile uint32_t body_len;
+    uint8_t           body[PG_SCRIPT_BODY_MAX];
+} pg_shm_script_http_t;
 
 #endif /* PROOFGATE_SEL4_PG_SHM_H */

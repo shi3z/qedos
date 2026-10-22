@@ -151,6 +151,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "pg-script"
+version = "0.1.0"
+dependencies = [
+ "pg-script-policy",
+]
+
+[[package]]
+name = "pg-script-cli"
+version = "0.1.0"
+dependencies = [
+ "pg-config",
+ "pg-script",
+ "pg-script-policy",
+ "pg-script-verify",
+]
+
+[[package]]
+name = "pg-script-policy"
+version = "0.1.0"
+dependencies = [
+ "pg-http",
+ "pg-policy",
+]
+
+[[package]]
+name = "pg-script-verify"
+version = "0.1.0"
+dependencies = [
+ "pg-config",
+ "pg-script",
+ "pg-script-policy",
+]
+
+[[package]]
 name = "pkg-config"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"

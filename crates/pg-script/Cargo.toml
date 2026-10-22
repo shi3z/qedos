@@ -1,0 +1,12 @@
+[package]
+name = "pg-script"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "QED Script: minimal no_std WebAssembly interpreter (i32 MVP, fuel/memory/stack bounded) and restricted host API"
+
+[dependencies]
+pg-script-policy = { path = "../pg-script-policy" }
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(kani)'] }

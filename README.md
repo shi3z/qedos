@@ -9,6 +9,7 @@ Enforces **TLS 1.3 + `X25519MLKEM768` + `TLS_AES_256_GCM_SHA384` only**, strict 
 * `docs/SECURITY.md` — guarantees and limits (X.509 auth is *not* post-quantum)
 * `docs/LAWS.md` — `LAW_001..012`: specification, Kani / Viper / test evidence, and assumptions
 * `docs/RESULTS.md` — TLS, HTTP, seL4 multi-PD, Kani, and C10K measurement results
+* **QED Script** (untrusted signed WebAssembly in an extra `script_pd`, opt-in `QEDOS_SCRIPT=1`): `docs/QED_SCRIPT.md`, `docs/SCRIPT_SECURITY.md`, `docs/SCRIPT_VERIFICATION.md`, `docs/SCRIPT_RESULTS.md`; laws `LAW_013..022` in `docs/LAWS.md`
 
 ## Quick start (no root needed)
 ```sh
@@ -28,6 +29,16 @@ python3 tests/test_sel4.py                         # SEL4_001..006 end-to-end mu
 python3 tests/perf.py                              # PERF_001..008 at 10 000 connections (host reference)
 cargo kani -p pg-policy && cargo kani -p pg-http && cargo kani -p pg-config   # 13/13 Kani bounded proofs
 ```
+
+## QED Script (opt-in)
+```sh
+scripts/qs-ws.sh test                               # new crates: 36 unit/fuzz tests (+ existing pure crates), offline
+python3 tests/test_script.py && python3 tests/test_script_security.py
+cargo kani -p pg-script && cargo kani -p pg-script-policy
+PATH=$PWD/third_party/venv/bin:$PATH QEDOS_SCRIPT=1 scripts/build-sel4.sh   # build/sel4-script/loader.img (13 PDs)
+python3 tests/test_script_sel4.py                   # boots it in QEMU: GET /script/hello over PQ-TLS, hostile modules, crash isolation
+```
+The default build (`scripts/build-sel4.sh` without the flag) is unchanged and still 12 PDs.
 
 ## Running on macOS (Apple Silicon / Intel)
 Prebuilt seL4 multi-PD images (`build/sel4/loader.img.gz` + `build/sel4/sel4_32.elf.gz`) are included in the repository so you can boot and test **QEDOS** on seL4 directly on a Mac without rebuilding the cross-toolchains:

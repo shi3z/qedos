@@ -1,0 +1,10 @@
+PASS SCRIPT_001 capability audit of script image (script_pd authority = 2 regions + 2 channels; LAW_014/018/022)
+PASS SCRIPT_002 script_pd verified 5 signed bundles (2 apps + 3 hostile test modules), 0 rejected (LAW_020)
+PASS SCRIPT_003 GET /script/hello -> {"message":"Hello from QEDOS"} via negotiated X25519MLKEM768 (0.32s incl. handshake under QEMU TCG)
+PASS SCRIPT_004 POST /script/json-echo transformed the JSON body inside the Wasm sandbox
+PASS SCRIPT_005 unknown module / traversal / encoded dot-segments / bad method rejected before any Wasm runs
+PASS SCRIPT_006 existing proxy intact: /health, backend A/B forwarding, hostile rejection, TLS<1.3 and classical groups refused
+PASS SCRIPT_007 OOB access -> 500 generic body, runaway loop -> 503 by fuel, no cross-request residue, no internal detail in responses
+PASS SCRIPT_008 /health answered in 0.09s while the runaway script ran (0.54s total); script_pd is lowest priority
+PASS SCRIPT_009 script_pd crashed: TLS 1.3 handshakes, /health and backend proxying unaffected; later script requests shed with 503
+ALL QED SCRIPT seL4 TESTS PASSED (9/9)

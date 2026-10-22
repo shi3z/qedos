@@ -16,7 +16,7 @@ SEL4_DIR = os.path.abspath(os.environ.get("QEDOS_SEL4_DIR", os.path.join(ROOT, "
 SYS_XML = os.path.join(SEL4_DIR, "proofgate.system")
 VIPER_DIR = os.path.join(SEL4_DIR, "viper")
 
-APP_PDS = {"tcp_pd", "tls_pd", "http_pd", "policy_pd", "connector_pd"}
+APP_PDS = {"tcp_pd", "tls_pd", "http_pd", "policy_pd", "connector_pd"}  # + script_pd when present
 DRIVER_PDS = {"ethernet_driver", "serial_driver", "timer_driver"}
 
 
@@ -26,6 +26,9 @@ def fail(msg: str) -> None:
 
 
 NON_TLS_PD_ELFS = ["http_pd.elf", "policy_pd.elf", "connector_pd.elf", "tcp_pd.elf"]
+# QED Script images also contain script_pd.elf, which must never hold key material either (LAW_018)
+if os.path.isfile(os.path.join(SEL4_DIR, "script_pd.elf")):
+    NON_TLS_PD_ELFS.append("script_pd.elf")
 LOADER_IMG = os.path.join(SEL4_DIR, "loader.img")
 KEY_PEM_MARK = b"-----BEGIN PRIVATE KEY-----"
 CERT_PEM_MARK = b"-----BEGIN CERTIFICATE-----"
@@ -147,7 +150,7 @@ def main() -> None:
 
     # 3. LAW_012: Hardware IRQs and I/O ports restricted strictly to driver PDs
     for pd in APP_PDS:
-        if pd_irqs.get(pd, 0) != 0 or pd_ioports.get(pd, 0) != 0:
+        if pd_irqs.get(pd, 0) != 0 or pd_ioports.get(pd, 0) != 0 or pd_irqs.get("script_pd", 0) != 0 or pd_ioports.get("script_pd", 0) != 0:
             fail(f"LAW_012 violated: application PD {pd} holds hardware IRQ or ioport capability")
 
     # 4. LAW_012: Strict PD communication graph topology
@@ -157,6 +160,12 @@ def main() -> None:
         "policy_pd": {"shm_http_policy", "shm_signed_config", "shm_policy_conn"},
         "connector_pd": {"shm_policy_conn", "shm_conn_http", "shm_tcp_conn"},
     }
+    if "script_pd" in pd_maps:
+        # QED Script image (QEDOS_SCRIPT=1): the two script regions are the only additions; script_pd's own
+        # authority is audited exhaustively by scripts/check-script-caps.py (LAW_013..LAW_022).
+        expected_mrs["http_pd"] = expected_mrs["http_pd"] | {"shm_script_http"}
+        expected_mrs["policy_pd"] = expected_mrs["policy_pd"] | {"shm_policy_script"}
+        expected_mrs["script_pd"] = {"shm_policy_script", "shm_script_http"}
     for pd, exp in expected_mrs.items():
         actual = set(pd_maps[pd].keys())
         if actual != exp:
@@ -168,6 +177,10 @@ def main() -> None:
         "policy_pd": {"http_pd", "connector_pd"},
         "connector_pd": {"policy_pd", "http_pd", "tcp_pd"},
     }
+    if "script_pd" in pd_maps:
+        expected_neighbors["http_pd"] = expected_neighbors["http_pd"] | {"script_pd"}
+        expected_neighbors["policy_pd"] = expected_neighbors["policy_pd"] | {"script_pd"}
+        expected_neighbors["script_pd"] = {"policy_pd", "http_pd"}
     for pd, exp in expected_neighbors.items():
         actual = neighbors(pd)
         if actual != exp:
@@ -189,7 +202,7 @@ def main() -> None:
                 if line.startswith("define mem_writeable(x)") and "mem_tls_keystore_contains" in line:
                     fail("LAW_008 Viper violation: tls_keystore is writeable in tls_pd.vpr")
 
-        if pd in APP_PDS:
+        if pd in APP_PDS | {"script_pd"}:
             if "define pansel4_has_irq_handler_cap(x) (false)" not in vpr:
                 fail(f"LAW_012 Viper violation: {pd}.vpr has IRQ handler cap")
             if "define pansel4_has_ioport_cap(x) (false)" not in vpr:

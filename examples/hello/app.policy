@@ -1,0 +1,14 @@
+# QED Script policy for examples/hello (bound into app.sig together with app.wasm)
+runtime = qs-wasm/1
+module = hello
+version = 1
+allow = resp_status
+allow = resp_content_type
+allow = resp_write
+max_memory_bytes = 65536
+max_fuel = 10000
+max_stack_depth = 4
+max_request_bytes = 4096
+max_response_bytes = 1024
+max_host_calls = 16
+max_exec_us = 10000

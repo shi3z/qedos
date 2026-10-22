@@ -28,6 +28,9 @@
   appliance (`LAW_010`). Capability isolation is verified by `scripts/check-caps.py` and Microkit's Viper
   specification generator (`build/sel4/viper/*.vpr`).
 
+## QED Script (untrusted code) — summary
+Untrusted signed WebAssembly runs in `script_pd` (opt-in image). Claims and limits are in `docs/LAWS.md` (`LAW_013..022`) and `docs/SCRIPT_SECURITY.md`. In short: memory addressing is proven for one function (Kani + Z3), capability separation is a *static audit* of the Microkit graph (Viper not run), most other properties are tested; there is **no wall-clock bound on seL4** (fuel only), **no authentication/Storage PD**, and the development code-signing seed is committed. An `app.proof` is never treated as evidence: no proof checker exists.
+
 ## Boundaries and Limitations
 * **seL4 kernel proofs on x86_64**: While seL4 has machine-checked functional-correctness and integrity proofs
   on specific architectures (e.g. ARMv7/AArch64/RISC-V configurations), double-check the exact verification

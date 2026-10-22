@@ -113,6 +113,15 @@ def main() -> None:
         "connector_pd", "connector_pd.elf", priority=93, budget=20000, stack_size=0x40000, cpu=0
     )
 
+    # QED Script (opt-in: QEDOS_SCRIPT=1). script_pd runs at the LOWEST application priority so a
+    # runaway script can never starve tcp/tls/http/policy/connector (LAW_017).
+    script_on = os.environ.get("QEDOS_SCRIPT") == "1"
+    script_pd = None
+    if script_on:
+        script_pd = ProtectionDomain(
+            "script_pd", "script_pd.elf", priority=92, budget=20000, stack_size=0x40000, cpu=0
+        )
+
     serial_system.add_client(tcp_pd)
     timer_system.add_client(tcp_pd)
     net_system.add_client_with_copier(tcp_pd, tcp_net_copier)
@@ -136,6 +145,12 @@ def main() -> None:
     shm_conn_http = MemoryRegion(sdf, "shm_conn_http", 0x10000)
     shm_tcp_conn = MemoryRegion(sdf, "shm_tcp_conn", 0x20000)
     tls_keystore = MemoryRegion(sdf, "tls_keystore", 0x2000)
+
+    if script_on:
+        shm_policy_script = MemoryRegion(sdf, "shm_policy_script", 0x10000)
+        shm_script_http = MemoryRegion(sdf, "shm_script_http", 0x8000)
+        sdf.add_mr(shm_policy_script)
+        sdf.add_mr(shm_script_http)
 
     for mr in [
         shm_tcp_tls,
@@ -180,6 +195,13 @@ def main() -> None:
     connector_pd.add_map(Map(shm_tcp_conn, 0x3600_0000, "rw"))
     tcp_pd.add_map(Map(shm_tcp_conn, 0x3600_0000, "rw"))
 
+    if script_on:
+        # script_pd maps ONLY these two regions; it has no tls_keystore, signed config, net, timer or IRQ (LAW_014/018/022)
+        policy_pd.add_map(Map(shm_policy_script, 0x3800_0000, "rw"))
+        script_pd.add_map(Map(shm_policy_script, 0x3800_0000, "rw"))
+        script_pd.add_map(Map(shm_script_http, 0x3900_0000, "rw"))
+        http_pd.add_map(Map(shm_script_http, 0x3900_0000, "rw"))
+
     # 4. qedos IPC Channels
     sdf.add_channel(Channel(tcp_pd, tls_pd, a_id=10, b_id=1))
     sdf.add_channel(Channel(tls_pd, http_pd, a_id=2, b_id=1))
@@ -187,6 +209,10 @@ def main() -> None:
     sdf.add_channel(Channel(policy_pd, connector_pd, a_id=2, b_id=1))
     sdf.add_channel(Channel(connector_pd, http_pd, a_id=2, b_id=3))
     sdf.add_channel(Channel(connector_pd, tcp_pd, a_id=3, b_id=11))
+
+    if script_on:
+        sdf.add_channel(Channel(policy_pd, script_pd, a_id=3, b_id=1))
+        sdf.add_channel(Channel(script_pd, http_pd, a_id=2, b_id=4))
 
     for pd in [
         serial_driver,
@@ -201,7 +227,7 @@ def main() -> None:
         http_pd,
         policy_pd,
         connector_pd,
-    ]:
+    ] + ([script_pd] if script_on else []):
         sdf.add_pd(pd)
 
     out_path = os.path.join(args.output, args.sdf)

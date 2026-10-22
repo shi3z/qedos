@@ -17,6 +17,10 @@
 
 #define CH_POLICY_HTTP 1
 #define CH_POLICY_CONN 2
+#ifdef QEDOS_SCRIPT
+#define CH_POLICY_SCRIPT 3
+extern uint8_t pg_rust_is_script_route(uint8_t method_u8, const uint8_t *target_ptr, size_t target_len);
+#endif
 
 extern int32_t pg_rust_policy_init(
     const uint8_t *blob_ptr,
@@ -46,6 +50,9 @@ static pg_shm_http_policy_t *shm_http_policy = (pg_shm_http_policy_t *)VADDR_SHM
 static pg_shm_policy_conn_t *shm_policy_conn = (pg_shm_policy_conn_t *)VADDR_SHM_POLICY_CONN;
 
 static uint32_t last_req_seq = 0;
+#ifdef QEDOS_SCRIPT
+static pg_shm_policy_script_t *shm_policy_script = (pg_shm_policy_script_t *)VADDR_SHM_POLICY_SCRIPT;
+#endif
 
 void init(void)
 {
@@ -95,6 +102,46 @@ void notified(microkit_channel ch)
     uint8_t dec = PG_DECISION_REJECT;
     uint8_t backend_id = 0;
     uint16_t reject_status = 503;
+
+#ifdef QEDOS_SCRIPT
+    /* QED Script dispatch: only for GET/POST /script/<module> that passes the shared path hygiene, and
+     * only when the signed config was verified (fail closed). Everything else takes the unchanged path. */
+    if (shm_policy_conn->config_verified &&
+        pg_rust_is_script_route(shm_http_policy->method, shm_http_policy->target, shm_http_policy->target_len)) {
+        if (shm_policy_script->req_seq != shm_policy_script->ack_seq) {
+            /* script_pd busy (or dead): shed load instead of queueing; proxying is unaffected. */
+            shm_http_policy->decision = PG_DECISION_REJECT;
+            shm_http_policy->backend_id = 0;
+            shm_http_policy->reject_status = 503;
+            PG_FENCE();
+            shm_http_policy->ack_seq = rseq;
+            PG_FENCE();
+            microkit_notify(CH_POLICY_HTTP);
+            return;
+        }
+        uint16_t slen = shm_http_policy->target_len;
+        if (slen > PG_MAX_TARGET) { slen = PG_MAX_TARGET; }
+        for (uint16_t i = 0; i < slen; i++) { shm_policy_script->target[i] = shm_http_policy->target[i]; }
+        uint32_t sblen = shm_http_policy->body_len;
+        if (sblen > PG_MAX_REQ_RAW) { sblen = PG_MAX_REQ_RAW; }
+        for (uint32_t i = 0; i < sblen; i++) { shm_policy_script->body[i] = shm_http_policy->body[i]; }
+        shm_policy_script->target_len = slen;
+        shm_policy_script->body_len = sblen;
+        shm_policy_script->method = shm_http_policy->method;
+        shm_policy_script->slot = shm_http_policy->slot;
+        shm_policy_script->keep_alive = shm_http_policy->keep_alive;
+        shm_http_policy->decision = PG_DECISION_SCRIPT;
+        shm_http_policy->backend_id = 0;
+        shm_http_policy->reject_status = 0;
+        PG_FENCE();
+        shm_http_policy->ack_seq = rseq;
+        PG_FENCE();
+        shm_policy_script->req_seq = shm_policy_script->req_seq + 1;
+        PG_FENCE();
+        microkit_notify(CH_POLICY_SCRIPT);
+        return;
+    }
+#endif
 
     (void)pg_rust_policy_decide(
         shm_http_policy->method,

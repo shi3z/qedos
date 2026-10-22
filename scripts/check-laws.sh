@@ -25,6 +25,21 @@ else
   echo "missing build/sel4/proofgate.system"; fail=1
 fi
 
+# QED Script (LAW_013..LAW_022) static checks
+for c in pg-script pg-script-policy pg-script-verify; do
+  grep -q "forbid(unsafe_code)" "crates/$c/src/lib.rs" || { echo "$c lacks forbid(unsafe_code)"; fail=1; }
+  grep -q "no_std" "crates/$c/src/lib.rs" || { echo "$c lacks no_std"; fail=1; }
+done
+if grep -rnE "std::process|Command::new|std::net|std::fs|TcpStream|UdpSocket|libc::" crates/pg-script crates/pg-script-policy crates/pg-script-verify sel4/rust_script/src sel4/pds/script_pd.c; then
+  echo "LAW_022/LAW_005 violated: network/fs/process API in QED Script TCB"; fail=1
+fi
+# LAW_015: the host API allowlist contains nothing resembling ambient authority
+if grep -E 'Api::[A-Za-z]+ => b"' crates/pg-script-policy/src/lib.rs | grep -E 'socket|connect|open|file|exec|spawn|sel4|cap|tls|key|mmap|syscall|time|random'; then
+  echo "LAW_015 violated: ambient-authority-looking name in the host API allowlist"; fail=1
+fi
+# LAW_014/018/022: script_pd's declared authority (baseline system + fragment, mutation-tested)
+python3 scripts/check-script-caps.py --selftest > /dev/null || fail=1
+echo "LAW_013..022 static check: QED Script crates forbid(unsafe_code)/no_std, no net/fs/process APIs, host API allowlist clean, script_pd capability audit + 9 mutants"
 echo "unsafe blocks in pg-proxy:"
 grep -rn "unsafe" crates/pg-proxy/src | grep -v "^.*//"
 exit $fail

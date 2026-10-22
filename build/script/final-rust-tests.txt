@@ -1,0 +1,13 @@
+     Running unittests src/lib.rs (target/debug/deps/pg_config-2bb4eda07ec89ad8)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+     Running unittests src/lib.rs (target/debug/deps/pg_http-935518b14e3ac711)
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/pg_policy-ca59403475dd31b5)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/pg_script-10b457accb54db5d)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.12s
+     Running unittests src/main.rs (target/debug/deps/qs-35c2e807553447d8)
+     Running unittests src/lib.rs (target/debug/deps/pg_script_policy-84da5bf6b90e84dc)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/pg_script_verify-7702f9ae4deb19c0)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s

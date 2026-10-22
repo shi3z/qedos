@@ -1,0 +1,4 @@
+{"label": "baseline-image", "n": 30, "boot_to_ready_s": 10.3, "health": {"mean_ms": 90.9, "median_ms": 83.0, "p95_ms": 85.9}}
+{"label": "script-image", "n": 30, "boot_to_ready_s": 11.3, "health": {"mean_ms": 91.1, "median_ms": 82.8, "p95_ms": 85.7}, "script_hello": {"mean_ms": 83.0, "median_ms": 83.2, "p95_ms": 85.0}, "script_json_echo_500B": {"mean_ms": 77.6, "median_ms": 85.0, "p95_ms": 89.0}}
+{"label": "baseline-image", "n": 30, "boot_to_ready_s": 10.8, "health": {"mean_ms": 90.7, "median_ms": 82.7, "p95_ms": 85.0}}
+{"label": "script-image", "n": 30, "boot_to_ready_s": 11.3, "health": {"mean_ms": 90.3, "median_ms": 82.4, "p95_ms": 84.3}, "script_hello": {"mean_ms": 81.4, "median_ms": 84.1, "p95_ms": 90.3}, "script_json_echo_500B": {"mean_ms": 89.4, "median_ms": 88.0, "p95_ms": 92.0}}

@@ -1,0 +1,16 @@
+[package]
+name = "pg-script-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "QED Script developer CLI: keygen, sign, verify, inspect, run (host-side tooling, not part of the TCB on seL4)"
+
+[[bin]]
+name = "qs"
+path = "src/main.rs"
+
+[dependencies]
+pg-config = { path = "../pg-config" }
+pg-script = { path = "../pg-script" }
+pg-script-policy = { path = "../pg-script-policy" }
+pg-script-verify = { path = "../pg-script-verify" }

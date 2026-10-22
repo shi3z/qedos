@@ -15,6 +15,8 @@
    * `pg-policy`: **3/3** harnesses pass (`accepted_path_has_no_traversal`, `forward_backend_is_table_member`, `deployed_routes_forward_only_to_valid_backends`).
    * `pg-config`: **2/2** harnesses pass (`unverified_blob_always_rejected`, `parse_blob_in_bounds`).
 
+4. **QED Script (opt-in, 2026-10-22) — see `docs/QED_SCRIPT.md`, `docs/SCRIPT_RESULTS.md`:** 13th PD `script_pd` (`QEDOS_SCRIPT=1`) executing Ed25519-signed WebAssembly (custom i32 subset interpreter, fuel/memory/stack/host-call bounded). Verified: `tests/test_script_sel4.py` 9/9 on seL4 in QEMU (PQ-TLS `GET /script/hello` → `{"message":"Hello from QEDOS"}`, hostile-module containment, crash isolation); 36 Rust tests; 16 + 151 Python tests; 7 new Kani harnesses (bounded/function-level) + 3 Z3 models; capability audit with 9 mutants; existing 13 Kani harnesses and `SEL4_001..006` re-run green (also on an image rebuilt from the modified sources). **Not done / not proven:** timer-based time limit on seL4, separate Storage PD, authentication (KV is denied on seL4), proof checker (`app.proof` is never trusted), Viper obligations not discharged, Rust/TinyGo SDK, hardware measurements. `LAW_013..022` evidence levels are in `docs/LAWS.md`; several are TESTED/AUDITED only.
+
 **What remains hardware-dependent (Stage E):**
 * Bare-metal UEFI/Multiboot2 boot, physical NIC driver (sDDF x86_64 provides `virtio-net-pci`), and multi-core hardware C10K measurements (dev host has no KVM; seL4 runs under QEMU TCG, while C10K PERF_001–008 run on the Linux host proxy).
 * X.509 certificate authentication uses ECDSA P-256 (key exchange is PQC-hybrid `X25519MLKEM768`; see `docs/SECURITY.md`).

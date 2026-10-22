@@ -1,0 +1,16 @@
+<!-- QED Script additions to build/sel4/proofgate.system (QEDOS_SCRIPT=1). Mirrors the QEDOS_SCRIPT
+     branches of sel4/meta_proofgate.py; scripts/check-script-caps.py in selftest mode verifies that mirror and
+     audits (baseline system + this fragment) before an image is built. -->
+<fragment>
+  <memory_region name="shm_policy_script" size="0x10000"/>
+  <memory_region name="shm_script_http" size="0x8000"/>
+  <protection_domain name="script_pd" priority="92" budget="20000" stack_size="0x40000" cpu="0">
+    <program_image path="script_pd.elf"/>
+    <map mr="shm_policy_script" vaddr="0x38000000" perms="rw"/>
+    <map mr="shm_script_http" vaddr="0x39000000" perms="rw"/>
+  </protection_domain>
+  <map-into pd="policy_pd" mr="shm_policy_script" vaddr="0x38000000" perms="rw"/>
+  <map-into pd="http_pd" mr="shm_script_http" vaddr="0x39000000" perms="rw"/>
+  <channel><end pd="policy_pd" id="3"/><end pd="script_pd" id="1"/></channel>
+  <channel><end pd="script_pd" id="2"/><end pd="http_pd" id="4"/></channel>
+</fragment>
