@@ -63,6 +63,12 @@ typedef struct {
 } http_slot_state_t;
 
 static http_slot_state_t slot_state[PG_MAX_CONNS];
+/* The forwarded (backend) request currently in flight, recorded from policy_pd's FORWARD decision. */
+static struct {
+    uint8_t  active;
+    uint8_t  slot;
+    uint32_t conn_id;
+} fwd_inflight;
 static uint32_t last_policy_ack = 0;
 static uint32_t last_conn_resp  = 0;
 #ifdef QEDOS_SCRIPT
@@ -114,6 +120,7 @@ static void process_slot_requests(uint8_t s)
         st->conn_id = 0;
         st->len = 0;
         st->awaiting_backend = 0;
+        if (fwd_inflight.active && fwd_inflight.slot == s) { fwd_inflight.active = 0; }
 #ifdef QEDOS_SCRIPT
         if (script_inflight.active && script_inflight.slot == s) { script_inflight.active = 0; }
 #endif
@@ -261,6 +268,11 @@ static void check_policy_completion(void)
         script_inflight.conn_id = slot_state[s].conn_id;
     }
 #endif
+    else if (dec == PG_DECISION_FORWARD) {
+        fwd_inflight.active = 1;
+        fwd_inflight.slot = s;
+        fwd_inflight.conn_id = slot_state[s].conn_id;
+    }
     /* If PG_DECISION_FORWARD, policy_pd notified connector_pd; wait for CH_HTTP_CONN */
 }
 
@@ -271,19 +283,26 @@ static void check_connector_response(void)
         return;
     }
     last_conn_resp = rseq;
+    check_policy_completion();     /* the FORWARD decision may not have been consumed yet */
 
     uint8_t s = shm_conn_http->slot;
     uint8_t ka = shm_conn_http->keep_alive;
     uint32_t len = shm_conn_http->raw_resp_len;
-    if (s < PG_MAX_CONNS && len > 0 && len <= PG_MAX_RESP_RAW) {
-        slot_state[s].awaiting_backend = 0;
-        send_resp_to_tls(s, shm_conn_http->raw_resp, len, ka ? 0 : 1);
-    }
     PG_FENCE();
     shm_conn_http->resp_ack = rseq;
     PG_FENCE();
-    if (s < PG_MAX_CONNS && ka) {
-        process_slot_requests(s);
+    /* Deliver only the answer to the forwarded request that is actually in flight, once. */
+    if (!fwd_inflight.active || s != fwd_inflight.slot || s >= PG_MAX_CONNS ||
+        slot_state[s].conn_id != fwd_inflight.conn_id || slot_state[s].conn_id == 0) {
+        return;
+    }
+    fwd_inflight.active = 0;
+    if (len > 0 && len <= PG_MAX_RESP_RAW) {
+        slot_state[s].awaiting_backend = 0;
+        send_resp_to_tls(s, shm_conn_http->raw_resp, len, ka ? 0 : 1);
+        if (ka) {
+            process_slot_requests(s);
+        }
     }
 }
 

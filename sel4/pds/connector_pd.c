@@ -72,7 +72,8 @@ static void handle_forward_from_policy(void)
     active_ka     = shm_policy_conn->keep_alive;
     uint8_t bid   = shm_policy_conn->backend_id;
 
-    if (!shm_policy_conn->config_verified || bid >= shm_policy_conn->num_backends) {
+    uint8_t nbe = shm_policy_conn->num_backends;
+    if (!shm_policy_conn->config_verified || nbe > PG_MAX_BACKENDS || bid >= nbe) {
         /* Fail closed if config not verified or backend index out of bounds */
         shm_conn_http->slot = active_slot;
         shm_conn_http->keep_alive = 0;
@@ -81,6 +82,7 @@ static void handle_forward_from_policy(void)
             502, 0, (active_method == 1) ? 1 : 0, 0, shm_conn_http->raw_resp, PG_MAX_RESP_RAW
         );
         PG_FENCE();
+        shm_policy_conn->fwd_ack = last_fwd_seq;   /* release the policy_pd busy gate on every path */
         shm_conn_http->resp_seq = shm_conn_http->resp_seq + 1;
         PG_FENCE();
         microkit_notify(CH_CONN_HTTP);
@@ -88,14 +90,18 @@ static void handle_forward_from_policy(void)
     }
 
     pg_backend_entry_t be = shm_policy_conn->backends[bid];
+    uint32_t tlen = shm_policy_conn->target_len;
+    uint32_t blen = shm_policy_conn->body_len;
+    if (tlen > PG_MAX_TARGET) { tlen = PG_MAX_TARGET; }
+    if (blen > PG_MAX_REQ_RAW) { blen = PG_MAX_REQ_RAW; }
     size_t tx_len = pg_rust_format_backend_request(
         active_method,
         shm_policy_conn->target,
-        shm_policy_conn->target_len,
+        tlen,
         be.ipv4,
         be.port,
         shm_policy_conn->body,
-        shm_policy_conn->body_len,
+        blen,
         shm_tcp_conn->tx_buf,
         sizeof(shm_tcp_conn->tx_buf)
     );
@@ -108,6 +114,7 @@ static void handle_forward_from_policy(void)
             500, 0, (active_method == 1) ? 1 : 0, 0, shm_conn_http->raw_resp, PG_MAX_RESP_RAW
         );
         PG_FENCE();
+        shm_policy_conn->fwd_ack = last_fwd_seq;
         shm_conn_http->resp_seq = shm_conn_http->resp_seq + 1;
         PG_FENCE();
         microkit_notify(CH_CONN_HTTP);
@@ -140,10 +147,11 @@ static void handle_response_from_tcp(void)
     uint16_t status_code = 502;
     size_t out_len = 0;
 
-    if (shm_tcp_conn->status == PG_CONN_STATUS_OK && shm_tcp_conn->rx_len > 0) {
+    uint32_t rxl = shm_tcp_conn->rx_len;           /* single fetch of a peer-controlled length */
+    if (shm_tcp_conn->status == PG_CONN_STATUS_OK && rxl > 0 && rxl <= PG_MAX_RESP_RAW) {
         out_len = pg_rust_validate_and_frame_response(
             shm_tcp_conn->rx_buf,
-            shm_tcp_conn->rx_len,
+            rxl,
             is_head,
             active_ka,
             &status_code,

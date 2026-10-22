@@ -58,6 +58,7 @@ pub enum LoadError {
     TypeMismatch,
     BadGlobal,
     BadTable,
+    BadName,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -266,6 +267,9 @@ impl<'a> Module<'a> {
     pub fn n_imports(&self) -> usize {
         self.n_imports
     }
+    pub fn n_globals(&self) -> usize {
+        self.n_globals
+    }
     pub fn handle_index(&self) -> usize {
         self.handle
     }
@@ -324,6 +328,13 @@ impl<'a> Module<'a> {
             let size = r.u32()? as usize;
             let body = r.bytes(size)?;
             if id == 0 {
+                // custom section: must still be well-formed (name:vec(byte) valid UTF-8), contents ignored
+                let mut c = Rd { b: body, p: 0 };
+                let nl = c.u32()? as usize;
+                let nm = c.bytes(nl)?;
+                if core::str::from_utf8(nm).is_err() {
+                    return Err(LoadError::BadName);
+                }
                 continue;
             }
             let rank = match id {
@@ -382,6 +393,9 @@ impl<'a> Module<'a> {
                         let module = s.bytes(ml)?;
                         let nl = s.u32()? as usize;
                         let name = s.bytes(nl)?;
+                        if core::str::from_utf8(module).is_err() || core::str::from_utf8(name).is_err() {
+                            return Err(LoadError::BadName);
+                        }
                         if s.u8()? != 0x00 {
                             return Err(LoadError::UnsupportedImport); // only function imports
                         }
@@ -509,6 +523,7 @@ impl<'a> Module<'a> {
         let total_funcs = n_imports + n_funcs;
         // exports
         let mut n_exports = 0usize;
+        let mut export_names: [&[u8]; MAX_EXPORTS] = [&[]; MAX_EXPORTS];
         if let Some(raw) = export_raw {
             let mut s = Rd { b: raw, p: 0 };
             let n = s.u32()?;
@@ -516,12 +531,19 @@ impl<'a> Module<'a> {
             while i < n {
                 let nl = s.u32()? as usize;
                 let name = s.bytes(nl)?;
+                if core::str::from_utf8(name).is_err() {
+                    return Err(LoadError::BadName); // names must be valid UTF-8 (found by differential fuzzing vs V8)
+                }
                 let kind = s.u8()?;
                 let idx = s.u32()? as usize;
-                n_exports += 1;
-                if n_exports > MAX_EXPORTS {
+                if export_names[..n_exports].contains(&name) {
+                    return Err(LoadError::BadName); // export names must be unique
+                }
+                if n_exports >= MAX_EXPORTS {
                     return Err(LoadError::TooMany);
                 }
+                export_names[n_exports] = name;
+                n_exports += 1;
                 match kind {
                     0x00 => {
                         if idx >= total_funcs {

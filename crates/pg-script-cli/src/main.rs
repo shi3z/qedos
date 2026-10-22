@@ -11,7 +11,8 @@ use pg_config::{public_key_from_seed, sign_ed25519};
 use pg_script::{execute, Clock, Method, NoClock, Request};
 use pg_script_policy::Kv;
 use pg_script_verify::{load, signed_message, MSG_MAX, CODE_SIGNING_PUBLIC_KEY};
-use std::{env, fs, process::exit, time::Instant};
+mod fuzzgen;
+use std::{env, fs, io::Write, process::exit, time::Instant};
 
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{:02x}", x)).collect()
@@ -32,9 +33,129 @@ impl Clock for WallClock {
     }
 }
 
+struct NoHost;
+impl pg_script::Host for NoHost {
+    fn call(&mut self, _id: u8, _a: &[i32], _m: &mut pg_script::Memory<'_>) -> Result<Option<i32>, pg_script::Trap> {
+        Err(pg_script::Trap::HostDenied)
+    }
+}
+
+fn mem_hash(mem: &[u8]) -> String {
+    // identical to tests/v8_ref.js: skip zero bytes, mix (index+1, byte) with a multiplicative hash
+    let mut h: u32 = 0x811C9DC5;
+    for (i, b) in mem.iter().enumerate() {
+        if *b != 0 {
+            h = (h ^ (i as u32 + 1)).wrapping_mul(0x9E3779B1).wrapping_add(*b as u32);
+        }
+    }
+    format!("{}:{:08x}", mem.len() / 65536, h)
+}
+
+/// Run one module on the reference-comparison profile (no imports, 3M fuel) and print the result line.
+fn diff_run_case(w: &[u8], scratch: &mut [u8]) -> String {
+    use pg_script::{Instance, Module, Trap};
+    let m = match Module::parse(w) {
+        Ok(m) => m,
+        Err(_) => return "reject".into(),
+    };
+    let limits = pg_script_policy::Limits {
+        max_memory_bytes: 1 << 20,
+        max_fuel: 3_000_000,
+        max_stack_depth: 16,
+        max_request_bytes: 0,
+        max_response_bytes: 0,
+        max_host_calls: 0,
+        max_exec_us: u32::MAX,
+    };
+    let mut inst = match Instance::new(&m, scratch, limits, |_, _, _| None) {
+        Ok(i) => i,
+        Err(_) => return "reject-link".into(),
+    };
+    let r = inst.call_handle(&mut NoHost);
+    let g: Vec<String> = (0..m.n_globals()).map(|i| format!("{:x}", inst.global(i).unwrap())).collect();
+    let tail = format!("mem={} g={}", mem_hash(inst.memory()), g.join(","));
+    match r {
+        Ok(v) => format!("ok {v} {tail}"),
+        Err(Trap::OutOfFuel) | Err(Trap::CallDepth) | Err(Trap::ValueStackOverflow) | Err(Trap::Timeout) => "res".into(),
+        Err(t) => format!("trap {t:?} {tail}"),
+    }
+}
+
 fn main() {
     let a: Vec<String> = env::args().skip(1).collect();
     match a.first().map(|s| s.as_str()) {
+        Some("fuzz-gen") if a.len() == 5 => {
+            // qs fuzz-gen <seed> <first-index> <count> <out.bin>
+            let (seed, first, count): (u64, u64, u64) = (a[1].parse().unwrap(), a[2].parse().unwrap(), a[3].parse().unwrap());
+            let mut out = Vec::new();
+            for i in first..first + count {
+                let (cat, w) = fuzzgen::case(seed, i);
+                out.push(cat);
+                out.extend_from_slice(&(w.len() as u32).to_le_bytes());
+                out.extend_from_slice(&w);
+            }
+            fs::write(&a[4], out).unwrap();
+        }
+        Some("diff-run") if a.len() == 2 => {
+            // qs diff-run <cases.bin>  -> "<idx> <result>" lines
+            let buf = fs::read(&a[1]).unwrap();
+            let mut scratch = vec![0u8; 1 << 20];
+            let mut p = 0;
+            let mut idx = 0u64;
+            let so = std::io::stdout();
+            let mut so = std::io::BufWriter::new(so.lock());
+            while p < buf.len() {
+                let len = u32::from_le_bytes(buf[p + 1..p + 5].try_into().unwrap()) as usize;
+                let w = &buf[p + 5..p + 5 + len];
+                p += 5 + len;
+                writeln!(so, "{idx} {}", diff_run_case(w, &mut scratch)).unwrap();
+                idx += 1;
+            }
+        }
+        Some("fuzz-emit") if a.len() == 4 => {
+            // qs fuzz-emit <seed> <index> <out.wasm>  (single case, for reproduction)
+            let (cat, w) = fuzzgen::case(a[1].parse().unwrap(), a[2].parse().unwrap());
+            fs::write(&a[3], &w).unwrap();
+            println!("category {cat}, {} bytes", w.len());
+        }
+        Some("fuzz-min") if a.len() == 4 => {
+            // qs fuzz-min <seed> <index> <outdir>: shrink a valid-category case while it still differs from V8
+            let (seed, idx): (u64, u64) = (a[1].parse().unwrap(), a[2].parse().unwrap());
+            let dir = &a[3];
+            fs::create_dir_all(dir).unwrap();
+            let differs = |p: &fuzzgen::Prog| -> bool {
+                let w = p.encode();
+                let bin = format!("{dir}/cand.bin");
+                let mut f = vec![0u8];
+                f.extend_from_slice(&(w.len() as u32).to_le_bytes());
+                f.extend_from_slice(&w);
+                fs::write(&bin, &f).unwrap();
+                let mut scratch = vec![0u8; 1 << 20];
+                let ours = format!("0 {}", diff_run_case(&w, &mut scratch));
+                fs::write(format!("{dir}/cand.ours"), &ours).unwrap();
+                let v8 = std::process::Command::new("node").arg("tests/v8_ref.js").arg(&bin).arg(format!("{dir}/cand.ours")).output().unwrap();
+                let v8 = String::from_utf8_lossy(&v8.stdout).trim().to_string();
+                !ours.starts_with("0 res") && ours != v8
+            };
+            let mut p = fuzzgen::prog_of_case(seed, idx);
+            if !differs(&p) {
+                println!("case does not differ (nothing to minimise)");
+                return;
+            }
+            let mut rounds = 0;
+            'outer: loop {
+                rounds += 1;
+                for cand in fuzzgen::shrink_variants(&p) {
+                    if differs(&cand) {
+                        p = cand;
+                        continue 'outer;
+                    }
+                }
+                break;
+            }
+            fs::write(format!("{dir}/min.wasm"), p.encode()).unwrap();
+            println!("minimised in {rounds} rounds -> {dir}/min.wasm ({} bytes)", p.encode().len());
+        }
         Some("keygen") if a.len() == 4 => {
             let mut seed = [0u8; 32];
             use std::io::Read;

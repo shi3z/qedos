@@ -190,6 +190,21 @@ int main(void)
     CHECK(resp_bytes(0) > 0, "S9 legit script response delivered even though the decision notification was late");
     CHECK(resp_bytes(1) == 0 || shm_http_policy->req_seq >= 2, "S9 no response leaked to the other client");
 
+    /* S10 connector-side injection: unsolicited / replayed / wrong-slot backend responses are not delivered */
+    reset_world();
+    for (int sl = 0; sl < 8; sl++) {
+        shm_conn_http->slot = (uint8_t)sl; shm_conn_http->keep_alive = 1; shm_conn_http->raw_resp_len = 4;
+        memcpy((void *)shm_conn_http->raw_resp, "EVIL", 4);
+        shm_conn_http->resp_seq = shm_conn_http->resp_seq + 1;
+        notified(CH_HTTP_CONN);
+    }
+    for (int k = 0; k < PG_MAX_CONNS; k++) CHECK(resp_bytes(k) == 0, "S10 unsolicited backend response delivered");
+    tls_feeds_request(2, 41);
+    shm_http_policy->slot = 2; shm_http_policy->decision = PG_DECISION_FORWARD; shm_http_policy->ack_seq = shm_http_policy->req_seq;
+    notified(CH_HTTP_POLICY);
+    shm_conn_http->slot = 1; shm_conn_http->raw_resp_len = 4; shm_conn_http->resp_seq = shm_conn_http->resp_seq + 1; notified(CH_HTTP_CONN);
+    CHECK(resp_bytes(1) == 0 && resp_bytes(2) == 0, "S10 wrong-slot answer dropped (and does not consume the in-flight request)");
+
     /* S8 random adversary: hammer every script-controlled byte + policy slot field, interleaved with legit traffic */
     reset_world();
     for (long it = 0; it < 400000; it++) {

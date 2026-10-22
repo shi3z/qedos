@@ -146,15 +146,25 @@ void notified(microkit_channel ch)
     }
 #endif
 
+    /* Lengths come from shared memory: clamp before they size any slice. */
+    uint32_t decide_tlen = shm_http_policy->target_len;
+    if (decide_tlen > PG_MAX_TARGET) { decide_tlen = PG_MAX_TARGET; }
     (void)pg_rust_policy_decide(
         shm_http_policy->method,
         shm_http_policy->target,
-        shm_http_policy->target_len,
+        decide_tlen,
         shm_http_policy->body_len,
         &dec,
         &backend_id,
         &reject_status
     );
+    if (dec == PG_DECISION_FORWARD && shm_policy_conn->fwd_seq != shm_policy_conn->fwd_ack) {
+        /* connector_pd is still serving the previous forwarded request: shed instead of overwriting
+         * shm_policy_conn (which would corrupt that request and mis-attribute its response). */
+        dec = PG_DECISION_REJECT;
+        backend_id = 0;
+        reject_status = 503;
+    }
 
     shm_http_policy->decision = dec;
     shm_http_policy->backend_id = backend_id;
