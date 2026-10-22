@@ -8,6 +8,8 @@
 #![forbid(unsafe_code)]
 
 pub mod host;
+pub mod ops;
+mod validate;
 pub mod wasm;
 
 pub use host::{content_type_str, execute, resolver, Clock, Method, NoClock, Outcome, Reason, Request};

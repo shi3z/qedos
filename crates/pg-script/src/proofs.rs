@@ -1,7 +1,5 @@
 //! Kani harnesses for the Script runtime (`cargo kani -p pg-script`).
 //!
-//! NOT executed in the environment that produced this commit (no Kani toolchain was available);
-//! they are specifications ready to run, and docs/LAWS.md records them as "written, not yet run".
 use super::wasm::*;
 use pg_script_policy::{Api, Policy};
 
@@ -21,7 +19,7 @@ fn checked_range_sound() {
 #[kani::unwind(6)]
 fn memory_access_never_panics() {
     let mut buf = [0u8; 8];
-    let mut m = Memory { bytes: &mut buf };
+    let mut m = Memory::new(&mut buf, 8, 8);
     let (base, off, val): (u32, u32, u32) = (kani::any(), kani::any(), kani::any());
     let size: u32 = if kani::any() { 4 } else if kani::any() { 2 } else { 1 };
     let _ = m.load(base, off, size);
@@ -40,7 +38,7 @@ fn resolver_is_confined_to_allowlist() {
     let (np, nr): (u8, u8) = (kani::any(), kani::any());
     let policy = Policy::for_proof(1u16 << (Api::RespWrite as u8));
     let r = crate::host::resolver(&policy);
-    let linked = r(&module, &name[..nlen], FuncType { n_params: np, n_results: nr });
+    let linked = r(&module, &name[..nlen], FuncType::i32s(np, nr));
     kani::cover!(linked.is_some(), "an allowed import does link (non-vacuous)");
     if let Some(id) = linked {
         let api = Api::from_id(id).unwrap();
@@ -54,17 +52,20 @@ fn resolver_is_confined_to_allowlist() {
 
 /// LAW_006-style: LEB decoders never panic and never read past the slice.
 #[kani::proof]
-#[kani::unwind(8)]
+#[kani::unwind(12)]
 fn leb_decoders_in_bounds() {
-    let b: [u8; 6] = kani::any();
+    let b: [u8; 11] = kani::any();
     let n: usize = kani::any();
-    kani::assume(n <= 6);
+    kani::assume(n <= 11);
     let p: usize = kani::any();
     kani::cover!(leb_u32(&b[..n], p).is_some(), "a LEB decodes (non-vacuous)");
     if let Some((_, np)) = leb_u32(&b[..n], p) {
         assert!(np <= n && np > p);
     }
     if let Some((_, np)) = leb_i32(&b[..n], p) {
+        assert!(np <= n && np > p);
+    }
+    if let Some((_, np)) = leb_i64(&b[..n], p) {
         assert!(np <= n && np > p);
     }
 }

@@ -1,23 +1,40 @@
-//! WebAssembly MVP subset: i32 values only, one linear memory (no `memory.grow`), no tables,
-//! globals, start function, floats, SIMD, threads, bulk memory or multi-value.
+//! WebAssembly integer subset: i32/i64 values, one linear memory (growable up to a hard cap), one
+//! funcref table, i32/i64 globals, structured control incl. `br_table`/`call_indirect`, sign-extension
+//! operators and `memory.copy`/`memory.fill`. No floats, SIMD, threads, WASI, reference types,
+//! multi-value, start function or passive segments.
 //!
-//! Accepted binary sections: type(1), import(2), function(3), memory(5), export(7), code(10),
-//! data(11), plus ignored custom(0). Everything else is rejected at load time.
+//! Accepted binary sections: type(1), import(2), function(3), table(4), memory(5), global(6),
+//! export(7), element(9), datacount(12), code(10), data(11), plus ignored custom(0). Everything
+//! else is rejected at load time. Every function body is type-checked by the validator in
+//! `validate.rs` before the module can be instantiated.
 
+use crate::ops::{eval_num, mem_op, num_sig, op, skip_imm, Ty};
 use pg_script_policy::Limits;
 
+pub use crate::ops::{leb_i32, leb_i64, leb_u32};
+
 pub const PAGE: usize = 65536;
-pub const MAX_TYPES: usize = 16;
-pub const MAX_PARAMS: usize = 4;
+/// Hard cap on linear memory pages (1 MiB) regardless of what the module or policy ask for.
+pub const MAX_PAGES: u32 = 16;
+pub const MAX_TYPES: usize = 32;
+pub const MAX_PARAMS: usize = 8;
 pub const MAX_IMPORTS: usize = 16;
-pub const MAX_FUNCS: usize = 32;
+pub const MAX_FUNCS: usize = 64;
 pub const MAX_DATA: usize = 8;
-pub const MAX_LOCALS: usize = 16;
-pub const MAX_NEST: usize = 16;
+pub const MAX_LOCALS: usize = 64;
+pub const MAX_NEST: usize = 32;
 pub const MAX_CALL_DEPTH: usize = 16;
+pub const MAX_GLOBALS: usize = 16;
+pub const MAX_TABLE: usize = 64;
+pub const MAX_ELEM: usize = 8;
+pub const MAX_EXPORTS: usize = 32;
+pub const MAX_BR_TABLE: usize = 64;
+/// Static bound on a function's operand stack depth (enforced by the validator).
+pub const MAX_OPSTACK: usize = 256;
 pub const VALUE_STACK: usize = 1024;
 pub const CTRL_STACK: usize = MAX_NEST * MAX_CALL_DEPTH;
 pub const CLOCK_INTERVAL: u32 = 256;
+const NULL_ELEM: u8 = 0xFF;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadError {
@@ -38,6 +55,9 @@ pub enum LoadError {
     BadData,
     NoHandle,
     UnresolvedImport,
+    TypeMismatch,
+    BadGlobal,
+    BadTable,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,15 +71,55 @@ pub enum Trap {
     CallDepth,
     HostCallLimit,
     Timeout,
+    /// `call_indirect` through a null/out-of-range table slot or with a mismatching signature.
+    IndirectCall,
     /// Host function refused the call (policy/ACL denial or bad argument).
     HostDenied,
     Malformed,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct FuncType {
     pub n_params: u8,
     pub n_results: u8,
+    pub(crate) params: [Ty; MAX_PARAMS],
+    pub(crate) res: Ty,
+}
+
+impl Default for FuncType {
+    fn default() -> Self {
+        FuncType { n_params: 0, n_results: 0, params: [Ty::I32; MAX_PARAMS], res: Ty::I32 }
+    }
+}
+
+impl PartialEq for FuncType {
+    fn eq(&self, o: &Self) -> bool {
+        self.n_params == o.n_params
+            && self.n_results == o.n_results
+            && self.params[..self.n_params as usize] == o.params[..o.n_params as usize]
+            && (self.n_results == 0 || self.res == o.res)
+    }
+}
+impl Eq for FuncType {}
+
+impl FuncType {
+    /// A signature made only of i32 values (the only kind host functions may have).
+    pub fn i32s(n_params: u8, n_results: u8) -> FuncType {
+        FuncType { n_params, n_results, params: [Ty::I32; MAX_PARAMS], res: Ty::I32 }
+    }
+    pub fn all_i32(&self) -> bool {
+        self.params[..self.n_params as usize].iter().all(|t| *t == Ty::I32) && (self.n_results == 0 || self.res == Ty::I32)
+    }
+    pub fn result(&self) -> Option<Ty> {
+        if self.n_results == 1 {
+            Some(self.res)
+        } else {
+            None
+        }
+    }
+    pub fn param(&self, i: usize) -> Ty {
+        self.params[i]
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -70,30 +130,46 @@ pub struct Import<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct FuncDef<'a> {
-    ty: FuncType,
-    n_locals: u8, // params + declared locals
-    code: &'a [u8], // instruction bytes, ends with 0x0B
+pub(crate) struct FuncDef<'a> {
+    pub ty: FuncType,
+    pub n_locals: u8,                   // params + declared locals
+    pub local_tys: [Ty; MAX_LOCALS],
+    pub code: &'a [u8],                 // instruction bytes, ends with 0x0B
+    pub max_stack: u16,                 // validated operand-stack bound
 }
 
 #[derive(Clone, Copy, Debug)]
-struct DataSeg<'a> {
-    offset: u32,
-    bytes: &'a [u8],
+pub(crate) struct DataSeg<'a> {
+    pub offset: u32,
+    pub bytes: &'a [u8],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct GlobalDef {
+    pub ty: Ty,
+    pub mutable: bool,
+    pub init: u64,
 }
 
 /// A parsed *and fully validated* module. Fields are private: the only constructor is [`Module::parse`].
 #[derive(Clone, Debug)]
 pub struct Module<'a> {
-    imports: [Import<'a>; MAX_IMPORTS],
-    n_imports: usize,
-    funcs: [FuncDef<'a>; MAX_FUNCS],
-    n_funcs: usize,
-    mem_pages: u32,
-    has_memory: bool,
-    data: [DataSeg<'a>; MAX_DATA],
-    n_data: usize,
-    handle: usize, // function-index-space index of export "handle"
+    pub(crate) types: [FuncType; MAX_TYPES],
+    pub(crate) n_types: usize,
+    pub(crate) imports: [Import<'a>; MAX_IMPORTS],
+    pub(crate) n_imports: usize,
+    pub(crate) funcs: [FuncDef<'a>; MAX_FUNCS],
+    pub(crate) n_funcs: usize,
+    pub(crate) mem_pages: u32,
+    pub(crate) mem_max_pages: u32,
+    pub(crate) has_memory: bool,
+    pub(crate) data: [DataSeg<'a>; MAX_DATA],
+    pub(crate) n_data: usize,
+    pub(crate) globals: [GlobalDef; MAX_GLOBALS],
+    pub(crate) n_globals: usize,
+    pub(crate) table_size: u32,
+    pub(crate) table: [u8; MAX_TABLE], // function-space index of each slot, NULL_ELEM when empty
+    pub(crate) handle: usize,          // function-index-space index of export "handle"
 }
 
 // ---------------------------------------------------------------------------
@@ -124,136 +200,43 @@ impl<'a> Rd<'a> {
         self.p = end;
         Ok(s)
     }
-}
-
-/// Canonical LEB128 u32 (max 5 bytes, unused bits of last byte must be zero).
-pub fn leb_u32(b: &[u8], mut p: usize) -> Option<(u32, usize)> {
-    let mut result: u32 = 0;
-    let mut shift = 0u32;
-    loop {
-        let byte = *b.get(p)?;
-        p += 1;
-        if shift == 28 && byte & 0x70 != 0 {
-            return None;
-        }
-        result |= ((byte & 0x7f) as u32) << shift;
-        if byte & 0x80 == 0 {
-            return Some((result, p));
-        }
-        shift += 7;
-        if shift > 28 {
-            return None;
-        }
-    }
-}
-
-/// LEB128 s32 (max 5 bytes; high bits of last byte must be a sign extension).
-pub fn leb_i32(b: &[u8], mut p: usize) -> Option<(i32, usize)> {
-    let mut result: i64 = 0;
-    let mut shift = 0u32;
-    loop {
-        let byte = *b.get(p)?;
-        p += 1;
-        if shift == 28 {
-            // remaining 4 bits (bits 28..31) plus 3 bits that must be sign-extension of bit 3.
-            let sign = (byte >> 3) & 1;
-            let hi = (byte >> 4) & 0x7;
-            if byte & 0x80 != 0 || (sign == 0 && hi != 0) || (sign == 1 && hi != 0x7) {
-                return None;
+    /// Constant expression: `i32.const x end` or `i64.const x end` (the only forms accepted).
+    fn const_expr(&mut self) -> Result<(Ty, u64), LoadError> {
+        match self.u8()? {
+            op::I32_CONST => {
+                let (v, np) = leb_i32(self.b, self.p).ok_or(LoadError::BadLeb)?;
+                self.p = np;
+                if self.u8()? != op::END {
+                    return Err(LoadError::BadData);
+                }
+                Ok((Ty::I32, v as u32 as u64))
             }
-            result |= ((byte & 0x7f) as i64) << shift;
-            // sign-extend from 32 bits
-            return Some((result as u32 as i32, p));
-        }
-        result |= ((byte & 0x7f) as i64) << shift;
-        shift += 7;
-        if byte & 0x80 == 0 {
-            if byte & 0x40 != 0 {
-                result |= -1i64 << shift;
+            op::I64_CONST => {
+                let (v, np) = leb_i64(self.b, self.p).ok_or(LoadError::BadLeb)?;
+                self.p = np;
+                if self.u8()? != op::END {
+                    return Err(LoadError::BadData);
+                }
+                Ok((Ty::I64, v as u64))
             }
-            return Some((result as i32, p));
+            _ => Err(LoadError::BadData),
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Opcodes (the complete accepted set)
-
-mod op {
-    pub const UNREACHABLE: u8 = 0x00;
-    pub const NOP: u8 = 0x01;
-    pub const BLOCK: u8 = 0x02;
-    pub const LOOP: u8 = 0x03;
-    pub const IF: u8 = 0x04;
-    pub const ELSE: u8 = 0x05;
-    pub const END: u8 = 0x0B;
-    pub const BR: u8 = 0x0C;
-    pub const BR_IF: u8 = 0x0D;
-    pub const RETURN: u8 = 0x0F;
-    pub const CALL: u8 = 0x10;
-    pub const DROP: u8 = 0x1A;
-    pub const SELECT: u8 = 0x1B;
-    pub const LOCAL_GET: u8 = 0x20;
-    pub const LOCAL_SET: u8 = 0x21;
-    pub const LOCAL_TEE: u8 = 0x22;
-    pub const I32_LOAD: u8 = 0x28;
-    pub const I32_LOAD8_S: u8 = 0x2C;
-    pub const I32_LOAD8_U: u8 = 0x2D;
-    pub const I32_LOAD16_S: u8 = 0x2E;
-    pub const I32_LOAD16_U: u8 = 0x2F;
-    pub const I32_STORE: u8 = 0x36;
-    pub const I32_STORE8: u8 = 0x3A;
-    pub const I32_STORE16: u8 = 0x3B;
-    pub const MEMORY_SIZE: u8 = 0x3F;
-    pub const I32_CONST: u8 = 0x41;
-    pub const I32_EQZ: u8 = 0x45;
-    pub const I32_GE_U: u8 = 0x4F;
-    pub const I32_ADD: u8 = 0x6A;
-    pub const I32_SHR_U: u8 = 0x76;
-}
-
-fn is_numeric(o: u8) -> bool {
-    (op::I32_EQZ..=op::I32_GE_U).contains(&o) || (op::I32_ADD..=op::I32_SHR_U).contains(&o)
-}
-fn is_load(o: u8) -> bool {
-    matches!(o, op::I32_LOAD | op::I32_LOAD8_S | op::I32_LOAD8_U | op::I32_LOAD16_S | op::I32_LOAD16_U)
-}
-fn is_store(o: u8) -> bool {
-    matches!(o, op::I32_STORE | op::I32_STORE8 | op::I32_STORE16)
-}
-fn access_size(o: u8) -> u32 {
-    match o {
-        op::I32_LOAD | op::I32_STORE => 4,
-        op::I32_LOAD16_S | op::I32_LOAD16_U | op::I32_STORE16 => 2,
-        _ => 1,
-    }
-}
-
-/// Skip the immediates of `o` (whose opcode byte has already been consumed); returns new pc.
-/// `Err` on truncation/non-canonical LEB. Also rejects every opcode outside the accepted set.
-fn skip_imm(code: &[u8], pc: usize, o: u8) -> Result<usize, LoadError> {
-    match o {
-        op::UNREACHABLE | op::NOP | op::ELSE | op::END | op::RETURN | op::DROP | op::SELECT => Ok(pc),
-        op::BLOCK | op::LOOP | op::IF => match code.get(pc) {
-            Some(0x40) | Some(0x7F) => Ok(pc + 1),
-            Some(_) => Err(LoadError::UnsupportedType),
-            None => Err(LoadError::Truncated),
-        },
-        op::BR | op::BR_IF | op::CALL | op::LOCAL_GET | op::LOCAL_SET | op::LOCAL_TEE => {
-            leb_u32(code, pc).map(|(_, p)| p).ok_or(LoadError::BadLeb)
+fn read_limits(s: &mut Rd<'_>) -> Result<(u32, Option<u32>), LoadError> {
+    let flag = s.u8()?;
+    let min = s.u32()?;
+    match flag {
+        0 => Ok((min, None)),
+        1 => {
+            let max = s.u32()?;
+            if max < min {
+                return Err(LoadError::BadMemory);
+            }
+            Ok((min, Some(max)))
         }
-        op::I32_CONST => leb_i32(code, pc).map(|(_, p)| p).ok_or(LoadError::BadLeb),
-        op::MEMORY_SIZE => match code.get(pc) {
-            Some(0x00) => Ok(pc + 1),
-            _ => Err(LoadError::BadMemory),
-        },
-        _ if is_load(o) || is_store(o) => {
-            let (_, p) = leb_u32(code, pc).ok_or(LoadError::BadLeb)?;
-            let (_, p) = leb_u32(code, p).ok_or(LoadError::BadLeb)?;
-            Ok(p)
-        }
-        _ if is_numeric(o) => Ok(pc),
-        _ => Err(LoadError::UnsupportedOpcode),
+        _ => Err(LoadError::BadMemory), // shared memory (threads) rejected
     }
 }
 
@@ -264,10 +247,41 @@ impl<'a> Module<'a> {
     pub fn memory_bytes(&self) -> usize {
         self.mem_pages as usize * PAGE
     }
+    /// Largest linear memory (in pages) the module may ever have, before limits are applied.
+    pub fn max_memory_pages(&self) -> u32 {
+        self.mem_max_pages
+    }
+    pub fn n_funcs(&self) -> usize {
+        self.n_funcs
+    }
+    /// Static operand-stack bound of own function `i` (validator output).
+    pub fn func_max_stack(&self, i: usize) -> u16 {
+        self.funcs[i].max_stack
+    }
+    /// Raw instruction bytes of own function `i` (ends with `end`). Used by the independent
+    /// proof checker, which re-derives facts from the same bytes the interpreter runs.
+    pub fn func_code(&self, i: usize) -> &'a [u8] {
+        self.funcs[i].code
+    }
+    pub fn n_imports(&self) -> usize {
+        self.n_imports
+    }
+    pub fn handle_index(&self) -> usize {
+        self.handle
+    }
+    pub fn table_len(&self) -> usize {
+        self.table_size as usize
+    }
+    /// Own-function index (not function-space index) stored in table slot `i`, if any.
+    pub fn table_entry(&self, i: usize) -> Option<usize> {
+        if i >= self.table_size as usize || self.table[i] == NULL_ELEM {
+            None
+        } else {
+            Some(self.table[i] as usize - self.n_imports)
+        }
+    }
 
-    /// Parse and validate. Every function body is checked here (opcode whitelist, structured
-    /// control nesting, local/call/branch indices, memory presence) so the interpreter never has to
-    /// trust the binary.
+    /// Parse and validate the whole module.
     pub fn parse(wasm: &'a [u8]) -> Result<Module<'a>, LoadError> {
         if wasm.len() < 8 || wasm[..8] != [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00] {
             return Err(LoadError::BadMagic);
@@ -280,16 +294,30 @@ impl<'a> Module<'a> {
         let mut func_types = [0u8; MAX_FUNCS];
         let mut n_funcs = 0usize;
         let mut mem_pages = 0u32;
+        let mut mem_max_pages = 0u32;
         let mut has_memory = false;
+        let mut table_size = 0u32;
+        let mut has_table = false;
+        let mut globals = [GlobalDef { ty: Ty::I32, mutable: false, init: 0 }; MAX_GLOBALS];
+        let mut n_globals = 0usize;
+        let mut table = [NULL_ELEM; MAX_TABLE];
         let mut handle: Option<u32> = None;
-        let empty = FuncDef { ty: FuncType::default(), n_locals: 0, code: &[] };
+        let empty = FuncDef {
+            ty: FuncType::default(),
+            n_locals: 0,
+            local_tys: [Ty::I32; MAX_LOCALS],
+            code: &[],
+            max_stack: 0,
+        };
         let mut funcs = [empty; MAX_FUNCS];
         let mut n_code = 0usize;
         let mut data = [DataSeg { offset: 0, bytes: &[] }; MAX_DATA];
         let mut n_data = 0usize;
-        let mut last_id = 0u8;
+        let mut last_rank = 0u8;
         let mut export_raw: Option<&'a [u8]> = None;
         let mut data_raw: Option<&'a [u8]> = None;
+        let mut elem_raw: Option<&'a [u8]> = None;
+        let mut datacount: Option<u32> = None;
 
         while !r.eof() {
             let id = r.u8()?;
@@ -299,19 +327,17 @@ impl<'a> Module<'a> {
                 continue;
             }
             let rank = match id {
-                1 => 1,
-                2 => 2,
-                3 => 3,
-                5 => 4,
-                7 => 5,
-                10 => 6,
-                11 => 7,
-                _ => return Err(LoadError::UnsupportedSection),
+                1..=7 => id,
+                9 => 9,
+                12 => 10,
+                10 => 11,
+                11 => 12,
+                _ => return Err(LoadError::UnsupportedSection), // incl. start(8), tag, ...
             };
-            if rank <= last_id {
+            if rank <= last_rank {
                 return Err(LoadError::SectionOrder);
             }
-            last_id = rank;
+            last_rank = rank;
             let mut s = Rd { b: body, p: 0 };
             match id {
                 1 => {
@@ -327,21 +353,22 @@ impl<'a> Module<'a> {
                         if np > MAX_PARAMS {
                             return Err(LoadError::UnsupportedType);
                         }
+                        let mut ft = FuncType::default();
                         let mut i = 0;
                         while i < np {
-                            if s.u8()? != 0x7F {
-                                return Err(LoadError::UnsupportedType);
-                            }
+                            ft.params[i] = Ty::from_byte(s.u8()?).ok_or(LoadError::UnsupportedType)?;
                             i += 1;
                         }
                         let nr = s.u32()? as usize;
                         if nr > 1 {
-                            return Err(LoadError::UnsupportedType);
+                            return Err(LoadError::UnsupportedType); // multi-value
                         }
-                        if nr == 1 && s.u8()? != 0x7F {
-                            return Err(LoadError::UnsupportedType);
+                        if nr == 1 {
+                            ft.res = Ty::from_byte(s.u8()?).ok_or(LoadError::UnsupportedType)?;
                         }
-                        types[n_types] = FuncType { n_params: np as u8, n_results: nr as u8 };
+                        ft.n_params = np as u8;
+                        ft.n_results = nr as u8;
+                        types[n_types] = ft;
                         n_types += 1;
                     }
                 }
@@ -380,27 +407,55 @@ impl<'a> Module<'a> {
                         n_funcs += 1;
                     }
                 }
+                4 => {
+                    if s.u32()? != 1 {
+                        return Err(LoadError::BadTable);
+                    }
+                    if s.u8()? != 0x70 {
+                        return Err(LoadError::BadTable); // funcref only
+                    }
+                    let (min, max) = read_limits(&mut s).map_err(|_| LoadError::BadTable)?;
+                    if min as usize > MAX_TABLE || max.is_some_and(|m| m as usize > MAX_TABLE) {
+                        return Err(LoadError::BadTable);
+                    }
+                    table_size = min;
+                    has_table = true;
+                }
                 5 => {
                     if s.u32()? != 1 {
                         return Err(LoadError::BadMemory);
                     }
-                    let flag = s.u8()?;
-                    let min = s.u32()?;
-                    if flag == 1 {
-                        let max = s.u32()?;
-                        if max < min {
-                            return Err(LoadError::BadMemory);
-                        }
-                    } else if flag != 0 {
-                        return Err(LoadError::BadMemory); // shared memory (threads) rejected
-                    }
-                    if min > 16 {
+                    let (min, max) = read_limits(&mut s)?;
+                    if min > MAX_PAGES {
                         return Err(LoadError::MemoryTooLarge);
                     }
                     mem_pages = min;
+                    mem_max_pages = core::cmp::min(max.unwrap_or(MAX_PAGES), MAX_PAGES);
                     has_memory = true;
                 }
+                6 => {
+                    let n = s.u32()? as usize;
+                    if n > MAX_GLOBALS {
+                        return Err(LoadError::TooMany);
+                    }
+                    while n_globals < n {
+                        let ty = Ty::from_byte(s.u8()?).ok_or(LoadError::BadGlobal)?;
+                        let mutable = match s.u8()? {
+                            0 => false,
+                            1 => true,
+                            _ => return Err(LoadError::BadGlobal),
+                        };
+                        let (ity, init) = s.const_expr().map_err(|_| LoadError::BadGlobal)?;
+                        if ity != ty {
+                            return Err(LoadError::BadGlobal);
+                        }
+                        globals[n_globals] = GlobalDef { ty, mutable, init };
+                        n_globals += 1;
+                    }
+                }
                 7 => export_raw = Some(body),
+                9 => elem_raw = Some(body),
+                12 => datacount = Some(s.u32()?),
                 10 => {
                     let n = s.u32()? as usize;
                     if n != n_funcs {
@@ -412,34 +467,48 @@ impl<'a> Module<'a> {
                         let mut f = Rd { b: fb, p: 0 };
                         let ngroups = f.u32()? as usize;
                         let ty = types[func_types[n_code] as usize];
+                        let mut local_tys = [Ty::I32; MAX_LOCALS];
                         let mut total = ty.n_params as usize;
+                        local_tys[..total].copy_from_slice(&ty.params[..total]);
                         let mut g = 0;
                         while g < ngroups {
                             let cnt = f.u32()? as usize;
-                            if f.u8()? != 0x7F {
-                                return Err(LoadError::UnsupportedType);
-                            }
-                            total = total.checked_add(cnt).ok_or(LoadError::TooMany)?;
-                            if total > MAX_LOCALS {
+                            let lt = Ty::from_byte(f.u8()?).ok_or(LoadError::UnsupportedType)?;
+                            let new_total = total.checked_add(cnt).ok_or(LoadError::TooMany)?;
+                            if new_total > MAX_LOCALS {
                                 return Err(LoadError::TooMany);
                             }
+                            let mut k = total;
+                            while k < new_total {
+                                local_tys[k] = lt;
+                                k += 1;
+                            }
+                            total = new_total;
                             g += 1;
                         }
-                        funcs[n_code] = FuncDef { ty, n_locals: total as u8, code: &fb[f.p..] };
+                        funcs[n_code] = FuncDef {
+                            ty,
+                            n_locals: total as u8,
+                            local_tys,
+                            code: &fb[f.p..],
+                            max_stack: 0,
+                        };
                         n_code += 1;
                     }
                 }
                 11 => data_raw = Some(body),
                 _ => return Err(LoadError::UnsupportedSection),
             }
-            if !s.eof() && id != 7 && id != 11 {
+            if !s.eof() && id != 7 && id != 11 && id != 9 {
                 return Err(LoadError::BadFunction);
             }
         }
         if n_code != n_funcs {
             return Err(LoadError::BadFunction);
         }
-        // exports: exactly find "handle" func export
+        let total_funcs = n_imports + n_funcs;
+        // exports
+        let mut n_exports = 0usize;
         if let Some(raw) = export_raw {
             let mut s = Rd { b: raw, p: 0 };
             let n = s.u32()?;
@@ -448,9 +517,28 @@ impl<'a> Module<'a> {
                 let nl = s.u32()? as usize;
                 let name = s.bytes(nl)?;
                 let kind = s.u8()?;
-                let idx = s.u32()?;
-                if kind == 0x00 && name == b"handle" {
-                    handle = Some(idx);
+                let idx = s.u32()? as usize;
+                n_exports += 1;
+                if n_exports > MAX_EXPORTS {
+                    return Err(LoadError::TooMany);
+                }
+                match kind {
+                    0x00 => {
+                        if idx >= total_funcs {
+                            return Err(LoadError::BadIndex);
+                        }
+                        if name == b"handle" {
+                            if handle.is_some() {
+                                return Err(LoadError::BadFunction);
+                            }
+                            handle = Some(idx as u32);
+                        }
+                    }
+                    0x01 if idx != 0 || !has_table => return Err(LoadError::BadIndex),
+                    0x02 if idx != 0 || !has_memory => return Err(LoadError::BadIndex),
+                    0x03 if idx >= n_globals => return Err(LoadError::BadIndex),
+                    0x01..=0x03 => {}
+                    _ => return Err(LoadError::BadFunction),
                 }
                 i += 1;
             }
@@ -463,26 +551,62 @@ impl<'a> Module<'a> {
             return Err(LoadError::NoHandle);
         }
         let hty = funcs[handle - n_imports].ty;
-        if hty.n_params != 0 || hty.n_results != 1 {
+        if hty.n_params != 0 || hty.result() != Some(Ty::I32) {
             return Err(LoadError::NoHandle);
         }
-        // data segments (active, `i32.const off; end`)
+        // element segments: active, table 0, `i32.const off`, vector of own-function indices
+        if let Some(raw) = elem_raw {
+            let mut s = Rd { b: raw, p: 0 };
+            let n = s.u32()? as usize;
+            if n > MAX_ELEM {
+                return Err(LoadError::TooMany);
+            }
+            let mut k = 0;
+            while k < n {
+                if !has_table || s.u32()? != 0 {
+                    return Err(LoadError::BadTable);
+                }
+                let (oty, off) = s.const_expr().map_err(|_| LoadError::BadTable)?;
+                if oty != Ty::I32 {
+                    return Err(LoadError::BadTable);
+                }
+                let off = off as u32 as i32;
+                let cnt = s.u32()? as usize;
+                if off < 0 || off as u64 + cnt as u64 > table_size as u64 {
+                    return Err(LoadError::BadTable);
+                }
+                let mut j = 0;
+                while j < cnt {
+                    let fi = s.u32()? as usize;
+                    // imports cannot be reached indirectly: only module-defined functions
+                    if fi < n_imports || fi >= total_funcs {
+                        return Err(LoadError::BadTable);
+                    }
+                    table[off as usize + j] = fi as u8;
+                    j += 1;
+                }
+                k += 1;
+            }
+            if !s.eof() {
+                return Err(LoadError::BadTable);
+            }
+        }
+        // data segments: active, memory 0, `i32.const off`
+        let mut n_data_decl = 0u32;
         if let Some(raw) = data_raw {
             let mut s = Rd { b: raw, p: 0 };
             let n = s.u32()? as usize;
             if n > MAX_DATA {
                 return Err(LoadError::TooMany);
             }
+            n_data_decl = n as u32;
             while n_data < n {
                 if s.u32()? != 0 || !has_memory {
                     return Err(LoadError::BadData);
                 }
-                if s.u8()? != op::I32_CONST {
-                    return Err(LoadError::BadData);
-                }
-                let (off, np) = leb_i32(s.b, s.p).ok_or(LoadError::BadLeb)?;
-                s.p = np;
-                if s.u8()? != op::END || off < 0 {
+                let (oty, off) = s.const_expr()?;
+                let off = off as u32 as i32;
+                if oty != Ty::I32 || off < 0 {
                     return Err(LoadError::BadData);
                 }
                 let len = s.u32()? as usize;
@@ -498,96 +622,48 @@ impl<'a> Module<'a> {
                 return Err(LoadError::BadData);
             }
         }
-        let m = Module {
+        if let Some(c) = datacount {
+            if c != n_data_decl {
+                return Err(LoadError::BadData);
+            }
+        }
+        let mut m = Module {
+            types,
+            n_types,
             imports,
             n_imports,
             funcs,
             n_funcs,
             mem_pages,
+            mem_max_pages,
             has_memory,
             data,
             n_data,
+            globals,
+            n_globals,
+            table_size,
+            table,
             handle,
         };
         let mut i = 0;
         while i < n_funcs {
-            m.validate_body(i)?;
+            m.funcs[i].max_stack = m.validate_body(i)?;
             i += 1;
         }
         Ok(m)
-    }
-
-    fn validate_body(&self, fi: usize) -> Result<(), LoadError> {
-        let f = &self.funcs[fi];
-        let code = f.code;
-        let total_funcs = self.n_imports + self.n_funcs;
-        let mut pc = 0usize;
-        let mut depth = 0usize; // open blocks inside the function (function body itself = level 0)
-        let mut else_seen = [false; MAX_NEST + 1];
-        let mut is_if = [false; MAX_NEST + 1];
-        loop {
-            let o = *code.get(pc).ok_or(LoadError::BadControl)?;
-            let np = skip_imm(code, pc + 1, o)?;
-            match o {
-                op::BLOCK | op::LOOP | op::IF => {
-                    if depth >= MAX_NEST {
-                        return Err(LoadError::TooMany);
-                    }
-                    depth += 1;
-                    else_seen[depth] = false;
-                    is_if[depth] = o == op::IF;
-                }
-                op::ELSE => {
-                    if depth == 0 || !is_if[depth] || else_seen[depth] {
-                        return Err(LoadError::BadControl);
-                    }
-                    else_seen[depth] = true;
-                }
-                op::END => {
-                    if depth == 0 {
-                        if np != code.len() {
-                            return Err(LoadError::BadControl);
-                        }
-                        return Ok(());
-                    }
-                    depth -= 1;
-                }
-                op::BR | op::BR_IF => {
-                    let (d, _) = leb_u32(code, pc + 1).ok_or(LoadError::BadLeb)?;
-                    if d as usize > depth {
-                        return Err(LoadError::BadIndex);
-                    }
-                }
-                op::CALL => {
-                    let (d, _) = leb_u32(code, pc + 1).ok_or(LoadError::BadLeb)?;
-                    if d as usize >= total_funcs {
-                        return Err(LoadError::BadIndex);
-                    }
-                }
-                op::LOCAL_GET | op::LOCAL_SET | op::LOCAL_TEE => {
-                    let (d, _) = leb_u32(code, pc + 1).ok_or(LoadError::BadLeb)?;
-                    if d >= f.n_locals as u32 {
-                        return Err(LoadError::BadIndex);
-                    }
-                }
-                _ if is_load(o) || is_store(o) || o == op::MEMORY_SIZE => {
-                    if !self.has_memory {
-                        return Err(LoadError::BadMemory);
-                    }
-                }
-                _ => {}
-            }
-            pc = np;
-        }
     }
 }
 
 // ---------------------------------------------------------------------------
 // Memory
 
-/// Bounds-checked linear memory view. All guest and host accesses go through [`Memory::range`].
+/// Bounds-checked linear memory view. All guest and host accesses go through [`checked_range`].
+/// `buf` is the whole scratch region; only `[0, len)` is addressable by the guest, `len` can grow
+/// (never shrink) up to `cap`.
 pub struct Memory<'m> {
-    pub(crate) bytes: &'m mut [u8],
+    pub(crate) buf: &'m mut [u8],
+    pub(crate) len: usize,
+    pub(crate) cap: usize,
 }
 
 /// Effective-address check used by every guest memory access (LAW_013).
@@ -605,43 +681,78 @@ pub fn checked_range(len: usize, base: u32, offset: u32, size: u32) -> Option<us
 }
 
 impl<'m> Memory<'m> {
+    /// `len` bytes are currently addressable, growth is allowed up to `cap` bytes (`cap <= buf.len()`).
+    pub fn new(buf: &'m mut [u8], len: usize, cap: usize) -> Memory<'m> {
+        let cap = core::cmp::min(cap, buf.len());
+        let len = core::cmp::min(len, cap);
+        Memory { buf, len, cap }
+    }
     pub fn len(&self) -> usize {
-        self.bytes.len()
+        self.len
     }
     pub fn is_empty(&self) -> bool {
-        self.bytes.is_empty()
+        self.len == 0
+    }
+    pub fn bytes(&self) -> &[u8] {
+        &self.buf[..self.len]
     }
     /// Range `[ptr, ptr+len)` for host functions; `ptr`/`len` are guest i32s interpreted as u32.
     pub fn range(&self, ptr: i32, len: i32) -> Result<core::ops::Range<usize>, Trap> {
-        let s = checked_range(self.bytes.len(), ptr as u32, 0, len as u32).ok_or(Trap::OutOfBounds)?;
+        let s = checked_range(self.len, ptr as u32, 0, len as u32).ok_or(Trap::OutOfBounds)?;
         Ok(s..s + len as u32 as usize)
     }
     pub fn slice(&self, ptr: i32, len: i32) -> Result<&[u8], Trap> {
         let r = self.range(ptr, len)?;
-        Ok(&self.bytes[r])
+        Ok(&self.buf[r])
     }
     pub fn slice_mut(&mut self, ptr: i32, len: i32) -> Result<&mut [u8], Trap> {
         let r = self.range(ptr, len)?;
-        Ok(&mut self.bytes[r])
+        Ok(&mut self.buf[r])
     }
-    pub(crate) fn load(&self, base: u32, offset: u32, size: u32) -> Result<u32, Trap> {
-        let s = checked_range(self.bytes.len(), base, offset, size).ok_or(Trap::OutOfBounds)?;
-        let mut v = 0u32;
+    pub(crate) fn load(&self, base: u32, offset: u32, size: u32) -> Result<u64, Trap> {
+        let s = checked_range(self.len, base, offset, size).ok_or(Trap::OutOfBounds)?;
+        let mut v = 0u64;
         let mut i = 0usize;
         while i < size as usize {
-            v |= (self.bytes[s + i] as u32) << (8 * i);
+            v |= (self.buf[s + i] as u64) << (8 * i);
             i += 1;
         }
         Ok(v)
     }
-    pub(crate) fn store(&mut self, base: u32, offset: u32, size: u32, val: u32) -> Result<(), Trap> {
-        let s = checked_range(self.bytes.len(), base, offset, size).ok_or(Trap::OutOfBounds)?;
+    pub(crate) fn store(&mut self, base: u32, offset: u32, size: u32, val: u64) -> Result<(), Trap> {
+        let s = checked_range(self.len, base, offset, size).ok_or(Trap::OutOfBounds)?;
         let mut i = 0usize;
         while i < size as usize {
-            self.bytes[s + i] = (val >> (8 * i)) as u8;
+            self.buf[s + i] = (val >> (8 * i)) as u8;
             i += 1;
         }
         Ok(())
+    }
+    /// `memory.grow`: returns the previous size in pages, or `None` if it would exceed `cap`.
+    /// New pages are explicitly zeroed (the scratch region may hold a previous tenant's bytes).
+    pub(crate) fn grow(&mut self, delta_pages: u32) -> Option<u32> {
+        let old = self.len / PAGE;
+        let new_pages = (old as u64).checked_add(delta_pages as u64)?;
+        let new_len = new_pages.checked_mul(PAGE as u64)?;
+        if new_len > self.cap as u64 {
+            return None;
+        }
+        let new_len = new_len as usize;
+        let mut i = self.len;
+        while i < new_len {
+            self.buf[i] = 0;
+            i += 1;
+        }
+        self.len = new_len;
+        Some(old as u32)
+    }
+    /// Zero every byte the guest could have written (called when the instance is dropped).
+    fn scrub(&mut self) {
+        let mut i = 0;
+        while i < self.len {
+            self.buf[i] = 0;
+            i += 1;
+        }
     }
 }
 
@@ -681,7 +792,8 @@ pub struct Instance<'a, 'm> {
     limits: Limits,
     fuel: u64,
     host_calls: u32,
-    vals: [i32; VALUE_STACK],
+    globals: [u64; MAX_GLOBALS],
+    vals: [u64; VALUE_STACK],
     sp: usize,
     ctrls: [Ctrl; CTRL_STACK],
     cp: usize,
@@ -691,11 +803,7 @@ pub struct Instance<'a, 'm> {
 
 impl<'a, 'm> Drop for Instance<'a, 'm> {
     fn drop(&mut self) {
-        let mut i = 0;
-        while i < self.mem.bytes.len() {
-            self.mem.bytes[i] = 0;
-            i += 1;
-        }
+        self.mem.scrub();
     }
 }
 
@@ -721,26 +829,39 @@ impl<'a, 'm> Instance<'a, 'm> {
             link[i] = resolve(im.module, im.name, im.ty).ok_or(LoadError::UnresolvedImport)?;
             i += 1;
         }
-        let mem = &mut mem[..size];
+        // growth ceiling: module max, hard cap, policy limit and the scratch buffer, whichever is smallest
+        let cap = core::cmp::min(
+            module.mem_max_pages as usize * PAGE,
+            core::cmp::min(limits.max_memory_bytes as usize, mem.len()),
+        );
+        let cap = cap - cap % PAGE;
+        let mem = Memory::new(mem, size, core::cmp::max(cap, size));
         let mut k = 0;
         while k < size {
-            mem[k] = 0;
+            mem.buf[k] = 0;
             k += 1;
         }
         let mut d = 0;
         while d < module.n_data {
             let seg = &module.data[d];
             let o = seg.offset as usize;
-            mem[o..o + seg.bytes.len()].copy_from_slice(seg.bytes);
+            mem.buf[o..o + seg.bytes.len()].copy_from_slice(seg.bytes);
             d += 1;
+        }
+        let mut globals = [0u64; MAX_GLOBALS];
+        let mut g = 0;
+        while g < module.n_globals {
+            globals[g] = module.globals[g].init;
+            g += 1;
         }
         Ok(Instance {
             module,
-            mem: Memory { bytes: mem },
+            mem,
             link,
             limits,
             fuel: limits.max_fuel as u64,
             host_calls: 0,
+            globals,
             vals: [0; VALUE_STACK],
             sp: 0,
             ctrls: [Ctrl { is_loop: false, arity: 0, height: 0, cont: 0 }; CTRL_STACK],
@@ -753,12 +874,20 @@ impl<'a, 'm> Instance<'a, 'm> {
     pub fn fuel_used(&self) -> u64 {
         self.limits.max_fuel as u64 - self.fuel
     }
+    /// Current linear memory contents.
     pub fn memory(&self) -> &[u8] {
-        self.mem.bytes
+        self.mem.bytes()
+    }
+    pub fn global(&self, i: usize) -> Option<u64> {
+        if i < self.module.n_globals {
+            Some(self.globals[i])
+        } else {
+            None
+        }
     }
 
     #[inline]
-    fn push(&mut self, v: i32) -> Result<(), Trap> {
+    fn push(&mut self, v: u64) -> Result<(), Trap> {
         if self.sp >= VALUE_STACK {
             return Err(Trap::ValueStackOverflow);
         }
@@ -767,7 +896,7 @@ impl<'a, 'm> Instance<'a, 'm> {
         Ok(())
     }
     #[inline]
-    fn pop(&mut self, floor: usize) -> Result<i32, Trap> {
+    fn pop(&mut self, floor: usize) -> Result<u64, Trap> {
         if self.sp <= floor {
             return Err(Trap::Malformed);
         }
@@ -797,7 +926,8 @@ impl<'a, 'm> Instance<'a, 'm> {
         }
         let base = self.sp - np;
         let extra = def.n_locals as usize - np;
-        if self.sp + extra > VALUE_STACK {
+        // static operand bound from the validator: after this check no push in this frame can overflow
+        if self.sp + extra + def.max_stack as usize > VALUE_STACK {
             return Err(Trap::ValueStackOverflow);
         }
         let mut i = 0;
@@ -846,7 +976,7 @@ impl<'a, 'm> Instance<'a, 'm> {
         if self.sp != 1 {
             return Err(Trap::Malformed);
         }
-        Ok(self.vals[0])
+        Ok(self.vals[0] as u32 as i32)
     }
 
     fn run<H: Host>(&mut self, host: &mut H) -> Result<(), Trap> {
@@ -876,6 +1006,30 @@ impl<'a, 'm> Instance<'a, 'm> {
                     continue 'frames;
                 }};
             }
+            macro_rules! branch {
+                ($d:expr) => {{
+                    let d = $d as usize;
+                    let open = self.cp - ctrl_base;
+                    if d == open {
+                        do_return!();
+                    }
+                    if d > open {
+                        return Err(Trap::Malformed);
+                    }
+                    let ti = self.cp - 1 - d;
+                    let c = self.ctrls[ti];
+                    let keep = if c.arity == 1 { Some(self.pop(floor)?) } else { None };
+                    if (c.height as usize) > self.sp {
+                        return Err(Trap::Malformed);
+                    }
+                    self.sp = c.height as usize;
+                    if let Some(v) = keep {
+                        self.push(v)?;
+                    }
+                    self.cp = if c.is_loop { ti + 1 } else { ti };
+                    pc = c.cont as usize;
+                }};
+            }
             loop {
                 self.burn(1)?;
                 since_clock += 1;
@@ -891,17 +1045,17 @@ impl<'a, 'm> Instance<'a, 'm> {
                     op::UNREACHABLE => return Err(Trap::Unreachable),
                     op::NOP => pc = npc,
                     op::BLOCK | op::LOOP | op::IF => {
-                        let arity = if code[pc + 1] == 0x7F { 1 } else { 0 };
+                        let arity = if code[pc + 1] == 0x40 { 0 } else { 1 };
                         let (els, end, steps) = Self::scan(code, npc)?;
                         self.burn(steps)?;
                         let mut cond = true;
                         if o == op::IF {
-                            cond = self.pop(floor)? != 0;
+                            cond = self.pop(floor)? as u32 != 0;
                         }
                         if o == op::IF && !cond {
                             match els {
                                 Some(e) => {
-                                    self.push_ctrl(false, arity, end, floor)?;
+                                    self.push_ctrl(false, arity, end)?;
                                     pc = e;
                                 }
                                 None => pc = end,
@@ -936,36 +1090,32 @@ impl<'a, 'm> Instance<'a, 'm> {
                             do_return!();
                         }
                     }
-                    op::BR | op::BR_IF => {
+                    op::BR => {
                         let (d, _) = leb_u32(code, pc + 1).ok_or(Trap::Malformed)?;
-                        let take = if o == op::BR_IF { self.pop(floor)? != 0 } else { true };
-                        if !take {
-                            pc = npc;
+                        branch!(d);
+                    }
+                    op::BR_IF => {
+                        let (d, _) = leb_u32(code, pc + 1).ok_or(Trap::Malformed)?;
+                        if self.pop(floor)? as u32 != 0 {
+                            branch!(d);
                         } else {
-                            let open = self.cp - ctrl_base;
-                            if d as usize == open {
-                                do_return!();
-                            }
-                            if d as usize > open {
-                                return Err(Trap::Malformed);
-                            }
-                            let ti = self.cp - 1 - d as usize;
-                            let c = self.ctrls[ti];
-                            let keep = if c.arity == 1 { Some(self.pop(floor)?) } else { None };
-                            if (c.height as usize) > self.sp {
-                                return Err(Trap::Malformed);
-                            }
-                            self.sp = c.height as usize;
-                            if let Some(v) = keep {
-                                self.push(v)?;
-                            }
-                            if c.is_loop {
-                                self.cp = ti + 1;
-                            } else {
-                                self.cp = ti;
-                            }
-                            pc = c.cont as usize;
+                            pc = npc;
                         }
+                    }
+                    op::BR_TABLE => {
+                        let sel = self.pop(floor)? as u32;
+                        let (n, mut p) = leb_u32(code, pc + 1).ok_or(Trap::Malformed)?;
+                        let want = core::cmp::min(sel, n);
+                        let mut k = 0u32;
+                        let target = loop {
+                            let (l, q) = leb_u32(code, p).ok_or(Trap::Malformed)?;
+                            if k == want {
+                                break l;
+                            }
+                            p = q;
+                            k += 1;
+                        };
+                        branch!(target);
                     }
                     op::RETURN => do_return!(),
                     op::CALL => {
@@ -985,11 +1135,15 @@ impl<'a, 'm> Instance<'a, 'm> {
                                 return Err(Trap::Malformed);
                             }
                             let mut args = [0i32; MAX_PARAMS];
-                            args[..np].copy_from_slice(&self.vals[self.sp - np..self.sp]);
+                            let mut a = 0;
+                            while a < np {
+                                args[a] = self.vals[self.sp - np + a] as u32 as i32;
+                                a += 1;
+                            }
                             self.sp -= np;
                             let r = host.call(self.link[idx], &args[..np], &mut self.mem)?;
                             match (r, ity.n_results) {
-                                (Some(v), 1) => self.push(v)?,
+                                (Some(v), 1) => self.push(v as u32 as u64)?,
                                 (None, 0) => {}
                                 _ => return Err(Trap::Malformed),
                             }
@@ -1000,12 +1154,31 @@ impl<'a, 'm> Instance<'a, 'm> {
                             continue 'frames;
                         }
                     }
+                    op::CALL_INDIRECT => {
+                        let (tidx, _) = leb_u32(code, pc + 1).ok_or(Trap::Malformed)?;
+                        let slot = self.pop(floor)? as u32;
+                        if slot >= m.table_size {
+                            return Err(Trap::IndirectCall);
+                        }
+                        let target = m.table[slot as usize];
+                        if target == NULL_ELEM {
+                            return Err(Trap::IndirectCall);
+                        }
+                        let target = target as usize;
+                        let want = m.types.get(tidx as usize).ok_or(Trap::Malformed)?;
+                        if target < m.n_imports || m.func_type(target) != *want {
+                            return Err(Trap::IndirectCall);
+                        }
+                        self.frames[self.nframes - 1].pc = npc as u32;
+                        self.enter(target - m.n_imports)?;
+                        continue 'frames;
+                    }
                     op::DROP => {
                         self.pop(floor)?;
                         pc = npc;
                     }
                     op::SELECT => {
-                        let c = self.pop(floor)?;
+                        let c = self.pop(floor)? as u32;
                         let b = self.pop(floor)?;
                         let a = self.pop(floor)?;
                         self.push(if c != 0 { a } else { b })?;
@@ -1031,102 +1204,114 @@ impl<'a, 'm> Instance<'a, 'm> {
                         }
                         pc = npc;
                     }
+                    op::GLOBAL_GET | op::GLOBAL_SET => {
+                        let (i, _) = leb_u32(code, pc + 1).ok_or(Trap::Malformed)?;
+                        let i = i as usize;
+                        if i >= m.n_globals {
+                            return Err(Trap::Malformed);
+                        }
+                        if o == op::GLOBAL_GET {
+                            let v = self.globals[i];
+                            self.push(v)?;
+                        } else {
+                            if !m.globals[i].mutable {
+                                return Err(Trap::Malformed);
+                            }
+                            self.globals[i] = self.pop(floor)?;
+                        }
+                        pc = npc;
+                    }
                     op::MEMORY_SIZE => {
-                        self.push((self.mem.len() / PAGE) as i32)?;
+                        self.push((self.mem.len() / PAGE) as u64)?;
+                        pc = npc;
+                    }
+                    op::MEMORY_GROW => {
+                        let delta = self.pop(floor)? as u32;
+                        self.burn(delta.min(MAX_PAGES) as u64 * 256)?; // zeroing cost
+                        let r = match self.mem.grow(delta) {
+                            Some(old) => old,
+                            None => u32::MAX, // -1
+                        };
+                        self.push(r as u64)?;
                         pc = npc;
                     }
                     op::I32_CONST => {
                         let (v, _) = leb_i32(code, pc + 1).ok_or(Trap::Malformed)?;
-                        self.push(v)?;
+                        self.push(v as u32 as u64)?;
                         pc = npc;
                     }
-                    _ if is_load(o) || is_store(o) => {
-                        let (_, p1) = leb_u32(code, pc + 1).ok_or(Trap::Malformed)?;
-                        let (offset, _) = leb_u32(code, p1).ok_or(Trap::Malformed)?;
-                        let size = access_size(o);
-                        if is_load(o) {
-                            let base = self.pop(floor)? as u32;
-                            let raw = self.mem.load(base, offset, size)?;
-                            let v = match o {
-                                op::I32_LOAD8_S => raw as u8 as i8 as i32,
-                                op::I32_LOAD16_S => raw as u16 as i16 as i32,
-                                _ => raw as i32,
-                            };
-                            self.push(v)?;
-                        } else {
-                            let val = self.pop(floor)? as u32;
-                            let base = self.pop(floor)? as u32;
-                            self.mem.store(base, offset, size, val)?;
+                    op::I64_CONST => {
+                        let (v, _) = leb_i64(code, pc + 1).ok_or(Trap::Malformed)?;
+                        self.push(v as u64)?;
+                        pc = npc;
+                    }
+                    op::PREFIX_FC => {
+                        let (sub, _) = leb_u32(code, pc + 1).ok_or(Trap::Malformed)?;
+                        let n = self.pop(floor)? as u32;
+                        let b = self.pop(floor)? as u32; // src (copy) or fill byte (fill)
+                        let dst = self.pop(floor)? as u32;
+                        self.burn(n as u64 / 64)?;
+                        let len = self.mem.len;
+                        let d = checked_range(len, dst, 0, n).ok_or(Trap::OutOfBounds)?;
+                        match sub {
+                            op::FC_MEMORY_COPY => {
+                                let s = checked_range(len, b, 0, n).ok_or(Trap::OutOfBounds)?;
+                                self.mem.buf.copy_within(s..s + n as usize, d);
+                            }
+                            op::FC_MEMORY_FILL => {
+                                let byte = b as u8;
+                                let mut i = 0usize;
+                                while i < n as usize {
+                                    self.mem.buf[d + i] = byte;
+                                    i += 1;
+                                }
+                            }
+                            _ => return Err(Trap::Malformed),
                         }
                         pc = npc;
                     }
-                    op::I32_EQZ => {
-                        let a = self.pop(floor)?;
-                        self.push((a == 0) as i32)?;
-                        pc = npc;
+                    _ => {
+                        if let Some(mo) = mem_op(o) {
+                            let (_, p1) = leb_u32(code, pc + 1).ok_or(Trap::Malformed)?;
+                            let (offset, _) = leb_u32(code, p1).ok_or(Trap::Malformed)?;
+                            let size = mo.size as u32;
+                            if mo.store {
+                                let val = self.pop(floor)?;
+                                let base = self.pop(floor)? as u32;
+                                self.mem.store(base, offset, size, val)?;
+                            } else {
+                                let base = self.pop(floor)? as u32;
+                                let raw = self.mem.load(base, offset, size)?;
+                                let v = if mo.signed {
+                                    let sh = 64 - 8 * size;
+                                    let sx = (((raw << sh) as i64) >> sh) as u64;
+                                    if mo.ty == Ty::I32 {
+                                        sx as u32 as u64
+                                    } else {
+                                        sx
+                                    }
+                                } else {
+                                    raw
+                                };
+                                self.push(v)?;
+                            }
+                            pc = npc;
+                        } else if let Some((_, n, _)) = num_sig(o) {
+                            let b = if n == 2 { self.pop(floor)? } else { 0 };
+                            let a = self.pop(floor)?;
+                            let r = eval_num(o, a, b)?;
+                            self.push(r)?;
+                            pc = npc;
+                        } else {
+                            return Err(Trap::Malformed);
+                        }
                     }
-                    _ if is_numeric(o) => {
-                        let b = self.pop(floor)?;
-                        let a = self.pop(floor)?;
-                        let (ua, ub) = (a as u32, b as u32);
-                        let r: i32 = match o {
-                            0x46 => (a == b) as i32,
-                            0x47 => (a != b) as i32,
-                            0x48 => (a < b) as i32,
-                            0x49 => (ua < ub) as i32,
-                            0x4A => (a > b) as i32,
-                            0x4B => (ua > ub) as i32,
-                            0x4C => (a <= b) as i32,
-                            0x4D => (ua <= ub) as i32,
-                            0x4E => (a >= b) as i32,
-                            0x4F => (ua >= ub) as i32,
-                            0x6A => a.wrapping_add(b),
-                            0x6B => a.wrapping_sub(b),
-                            0x6C => a.wrapping_mul(b),
-                            0x6D => {
-                                if b == 0 {
-                                    return Err(Trap::DivByZero);
-                                }
-                                if a == i32::MIN && b == -1 {
-                                    return Err(Trap::IntOverflow);
-                                }
-                                a / b
-                            }
-                            0x6E => {
-                                if b == 0 {
-                                    return Err(Trap::DivByZero);
-                                }
-                                (ua / ub) as i32
-                            }
-                            0x6F => {
-                                if b == 0 {
-                                    return Err(Trap::DivByZero);
-                                }
-                                a.wrapping_rem(b)
-                            }
-                            0x70 => {
-                                if b == 0 {
-                                    return Err(Trap::DivByZero);
-                                }
-                                (ua % ub) as i32
-                            }
-                            0x71 => a & b,
-                            0x72 => a | b,
-                            0x73 => a ^ b,
-                            0x74 => a.wrapping_shl(ub),
-                            0x75 => a.wrapping_shr(ub),
-                            _ => ua.wrapping_shr(ub) as i32,
-                        };
-                        self.push(r)?;
-                        pc = npc;
-                    }
-                    _ => return Err(Trap::Malformed),
                 }
             }
         }
     }
 
-    fn push_ctrl(&mut self, is_loop: bool, arity: u8, cont: usize, _floor: usize) -> Result<(), Trap> {
+    fn push_ctrl(&mut self, is_loop: bool, arity: u8, cont: usize) -> Result<(), Trap> {
         if self.cp >= CTRL_STACK {
             return Err(Trap::CallDepth);
         }
