@@ -1,0 +1,324 @@
+{
+ "_comment": "Intended authority per PD. Reviewed by hand against docs/ARCHITECTURE.md and docs/SECURITY_BOUNDARIES.md; scripts/capgraph.py fails the audit if the generated image differs in either direction. Any change here is a security-relevant change and needs review.",
+ "secrets": {
+  "regions": [
+   "tls_keystore",
+   "shm_signed_config"
+  ],
+  "note": "tls_keystore: TLS private key + certificate (tls_pd only, read-only). shm_signed_config: Ed25519-verified routing/backend config (policy_pd only, read-only)."
+ },
+ "pds": {
+  "connector_pd": {
+   "signal": [
+    "http_pd",
+    "policy_pd",
+    "tcp_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "shm_policy_conn": "rw",
+    "shm_conn_http": "rw",
+    "shm_tcp_conn": "rw"
+   },
+   "other_caps": [],
+   "priority": 93,
+   "rationale": "Only PD allowed to cause outbound backend connections (through tcp_pd); no keys."
+  },
+  "ethernet_driver": {
+   "signal": [
+    "net_virt_rx",
+    "net_virt_tx"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [
+    "irq_1_ethernet_driver"
+   ],
+   "ioport": [
+    "0xcf8-0xcfb",
+    "0xcfc-0xcff"
+   ],
+   "maps": {
+    "hw_net_rings": "rw",
+    "virtio_net_regs": "rw",
+    "generic/net/queue/ethernet_driver/net_virt_rx/free": "rw",
+    "generic/net/queue/ethernet_driver/net_virt_rx/active": "rw",
+    "generic/net/queue/ethernet_driver/net_virt_tx/free": "rw",
+    "generic/net/queue/ethernet_driver/net_virt_tx/active": "rw"
+   },
+   "other_caps": [],
+   "priority": 101
+  },
+  "http_pd": {
+   "signal": [
+    "connector_pd",
+    "policy_pd",
+    "tls_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "shm_tls_http": "rw",
+    "shm_http_policy": "rw",
+    "shm_conn_http": "rw"
+   },
+   "other_caps": [],
+   "priority": 95,
+   "rationale": "HTTP parser; the only PD that may deliver bytes into a client's TLS stream; also receives script and connector responses."
+  },
+  "net_virt_rx": {
+   "signal": [
+    "ethernet_driver",
+    "tcp_net_copier"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "generic/net/queue/ethernet_driver/net_virt_rx/free": "rw",
+    "generic/net/queue/ethernet_driver/net_virt_rx/active": "rw",
+    "generic/net/rx/data/device": "r",
+    "generic/net/rx/virt_metadata": "rw",
+    "generic/net/queue/net_virt_rx/tcp_net_copier/free": "rw",
+    "generic/net/queue/net_virt_rx/tcp_net_copier/active": "rw"
+   },
+   "other_caps": [],
+   "priority": 99
+  },
+  "net_virt_tx": {
+   "signal": [
+    "ethernet_driver",
+    "tcp_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "generic/net/queue/ethernet_driver/net_virt_tx/free": "rw",
+    "generic/net/queue/ethernet_driver/net_virt_tx/active": "rw",
+    "generic/net/queue/net_virt_tx/tcp_pd/free": "rw",
+    "generic/net/queue/net_virt_tx/tcp_pd/active": "rw",
+    "generic/net/tx/data/client/tcp_pd": "r"
+   },
+   "other_caps": [],
+   "priority": 100
+  },
+  "policy_pd": {
+   "signal": [
+    "connector_pd",
+    "http_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "shm_http_policy": "rw",
+    "shm_signed_config": "r",
+    "shm_policy_conn": "rw"
+   },
+   "other_caps": [],
+   "priority": 94,
+   "rationale": "Decides route/backend from the Ed25519-verified signed config (read-only mapping); dispatches /script/* to script_pd."
+  },
+  "script_pd": {
+   "signal": [
+    "http_pd",
+    "policy_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "shm_policy_script": "rw",
+    "shm_script_http": "rw"
+   },
+   "other_caps": [],
+   "priority": 92,
+   "rationale": "Untrusted-code host. Exactly two shared regions and two notification channels (policy_pd request in, http_pd response out). No secrets, no hardware, no children. Lowest priority.",
+   "interface_pds": [
+    "http_pd",
+    "policy_pd",
+    "monitor"
+   ],
+   "optional": true
+  },
+  "serial_driver": {
+   "signal": [
+    "serial_virt_tx"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [
+    "0x3f8-0x3ff"
+   ],
+   "maps": {
+    "generic/serial/queue/serial_driver/serial_virt_tx": "rw",
+    "generic/serial/data/serial_driver/serial_virt_tx": "rw"
+   },
+   "other_caps": [],
+   "priority": 100
+  },
+  "serial_virt_tx": {
+   "signal": [
+    "serial_driver",
+    "tcp_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "generic/serial/queue/serial_driver/serial_virt_tx": "rw",
+    "generic/serial/data/serial_driver/serial_virt_tx": "rw",
+    "generic/serial/queue/serial_virt_tx/tcp_pd": "rw",
+    "generic/serial/data/serial_virt_tx/tcp_pd": "rw"
+   },
+   "other_caps": [],
+   "priority": 99
+  },
+  "tcp_net_copier": {
+   "signal": [
+    "net_virt_rx",
+    "tcp_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "generic/net/queue/net_virt_rx/tcp_net_copier/free": "rw",
+    "generic/net/queue/net_virt_rx/tcp_net_copier/active": "rw",
+    "generic/net/queue/tcp_net_copier/tcp_pd/free": "rw",
+    "generic/net/queue/tcp_net_copier/tcp_pd/active": "rw",
+    "generic/net/rx/data/device": "rw",
+    "generic/net/rx/data/client/tcp_pd": "rw"
+   },
+   "other_caps": [],
+   "priority": 98
+  },
+  "tcp_pd": {
+   "signal": [
+    "connector_pd",
+    "net_virt_tx",
+    "serial_virt_tx",
+    "tcp_net_copier",
+    "tls_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [
+    "timer_driver"
+   ],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "generic/serial/queue/serial_virt_tx/tcp_pd": "rw",
+    "generic/serial/data/serial_virt_tx/tcp_pd": "rw",
+    "generic/net/queue/tcp_net_copier/tcp_pd/free": "rw",
+    "generic/net/queue/tcp_net_copier/tcp_pd/active": "rw",
+    "generic/net/rx/data/client/tcp_pd": "rw",
+    "generic/net/queue/net_virt_tx/tcp_pd/free": "rw",
+    "generic/net/queue/net_virt_tx/tcp_pd/active": "rw",
+    "generic/net/tx/data/client/tcp_pd": "rw",
+    "generic/net/lib_sddf_lwip/tcp_pd": "rw",
+    "shm_tcp_tls": "rw",
+    "shm_tcp_conn": "rw"
+   },
+   "other_caps": [],
+   "priority": 97,
+   "rationale": "Owns the NIC queues, lwIP, serial client and the timer client (PPC). Ciphertext side of TLS; outbound backend TCP for connector_pd."
+  },
+  "timer_driver": {
+   "signal": [
+    "tcp_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [
+    "irq_107_timer_driver"
+   ],
+   "ioport": [],
+   "maps": {
+    "hpet_regs": "rw"
+   },
+   "other_caps": [],
+   "priority": 102
+  },
+  "tls_pd": {
+   "signal": [
+    "http_pd",
+    "tcp_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "shm_tcp_tls": "rw",
+    "tls_keystore": "r",
+    "shm_tls_http": "rw"
+   },
+   "other_caps": [],
+   "priority": 96,
+   "rationale": "Only PD that maps the TLS key store (read-only). Talks to tcp_pd (ciphertext) and http_pd (plaintext) only."
+  }
+ },
+ "features": {
+  "script": {
+   "requires_pd": "script_pd",
+   "add": {
+    "http_pd": {
+     "signal": [
+      "script_pd"
+     ],
+     "maps": {
+      "shm_script_http": "rw"
+     }
+    },
+    "policy_pd": {
+     "signal": [
+      "script_pd"
+     ],
+     "maps": {
+      "shm_policy_script": "rw"
+     }
+    }
+   }
+  }
+ }
+}
