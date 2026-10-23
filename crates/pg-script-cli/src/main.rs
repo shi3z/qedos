@@ -2,6 +2,7 @@
 //!
 //! qs keygen <seed.hex> <pub.rs> <pub.hex>
 //! qs sign   --seed <seed.hex> <dir>            (reads app.wasm app.policy [app.proof], writes app.sig)
+//! qs raw-sign --seed <seed.hex> <file>         (generic Ed25519 over raw bytes, writes <file>.sig)
 //! qs verify [--pub <pub.hex>] <dir>
 //! qs run    [--pub <pub.hex>] [--method GET|POST] [--path P] [--query Q] [--body S | --body-file F]
 //!           [--content-type T] [--principal N] [--repeat N] [--mem-kb N] <dir>
@@ -166,6 +167,16 @@ fn main() {
             fs::write(&a[2], format!("[{}]\n", lits.join(", "))).unwrap();
             fs::write(&a[3], format!("{}\n", hex(&pubk))).unwrap();
             println!("wrote {} (secret, dev only), {}, {}", a[1], a[2], a[3]);
+        }
+        Some("raw-sign") if a.len() == 4 && a[1] == "--seed" => {
+            // qs raw-sign --seed <seed.hex> <file>   (writes <file>.sig; generic Ed25519 over raw bytes,
+            // used by tools/press-release.py for the QEDOS Press signed-release format — distinct from
+            // the QED Script `sign` subcommand's app.wasm/app.policy/app.proof message format above).
+            let seed: [u8; 32] = unhex(&fs::read_to_string(&a[2]).unwrap()).try_into().unwrap_or_else(|_| die("seed must be 32 bytes"));
+            let msg = fs::read(&a[3]).unwrap();
+            let sig = sign_ed25519(&seed, &msg);
+            fs::write(format!("{}.sig", a[3]), format!("{}\n", hex(&sig))).unwrap();
+            println!("wrote {}.sig", a[3]);
         }
         Some("sign") => {
             let (mut seed_path, mut dir) = (None, None);

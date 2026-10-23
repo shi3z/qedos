@@ -1,7 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["crates/pg-http", "crates/pg-policy", "crates/pg-config", "crates/pg-proxy", "crates/pg-load",
-  "crates/pg-script-policy", "crates/pg-script", "crates/pg-script-verify", "crates/pg-script-cli", "crates/pg-ipc", "crates/pg-script-proofcheck"]
+  "crates/pg-script-policy", "crates/pg-script", "crates/pg-script-verify", "crates/pg-script-cli", "crates/pg-ipc", "crates/pg-script-proofcheck",
+  "crates/pg-press"]
 
 [workspace.package]
 edition = "2021"

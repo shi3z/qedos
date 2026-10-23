@@ -131,6 +131,18 @@ def main() -> None:
         SCRIPT_CHILD_ID = 10   # must match SCRIPT_CHILD_ID in sel4/pds/supervisor_pd.c
         supervisor_pd.add_child_pd(script_pd, child_id=SCRIPT_CHILD_ID)
 
+    # QEDOS Press (opt-in: QEDOS_PRESS=1), independent of QEDOS_SCRIPT (both may be built together).
+    # No supervisor parent: this PD runs no untrusted/attacker-controlled code (a fixed, signed
+    # content lookup only), so the fault-containment need that motivated script_pd's supervisor does
+    # not apply the same way here -- a documented, narrower-capability gap, not an oversight
+    # (docs/QEDOS_PRESS_CMS.md).
+    press_on = os.environ.get("QEDOS_PRESS") == "1"
+    press_pd = None
+    if press_on:
+        press_pd = ProtectionDomain(
+            "qedos_press_pd", "qedos_press_pd.elf", priority=92, budget=20000, stack_size=0x40000, cpu=0
+        )
+
     serial_system.add_client(tcp_pd)
     timer_system.add_client(tcp_pd)
     if script_on:
@@ -166,6 +178,12 @@ def main() -> None:
         shm_sup_http = MemoryRegion(sdf, "shm_sup_http", 0x1000)
         sdf.add_mr(shm_http_sup)
         sdf.add_mr(shm_sup_http)
+
+    if press_on:
+        shm_policy_press = MemoryRegion(sdf, "shm_policy_press", 0x10000)
+        shm_press_http = MemoryRegion(sdf, "shm_press_http", 0x10000)
+        sdf.add_mr(shm_policy_press)
+        sdf.add_mr(shm_press_http)
 
     for mr in [
         shm_tcp_tls,
@@ -222,6 +240,14 @@ def main() -> None:
         supervisor_pd.add_map(Map(shm_sup_http, 0x3B00_0000, "rw"))
         http_pd.add_map(Map(shm_sup_http, 0x3B00_0000, "r"))
 
+    if press_on:
+        # qedos_press_pd maps ONLY these two regions; it has no tls_keystore, signed config, net,
+        # timer or IRQ. Its content bundle is its own read-only .rodata, not a shared region.
+        policy_pd.add_map(Map(shm_policy_press, 0x3C00_0000, "rw"))
+        press_pd.add_map(Map(shm_policy_press, 0x3C00_0000, "rw"))
+        press_pd.add_map(Map(shm_press_http, 0x3D00_0000, "rw"))
+        http_pd.add_map(Map(shm_press_http, 0x3D00_0000, "rw"))
+
     # 4. qedos IPC Channels
     sdf.add_channel(Channel(tcp_pd, tls_pd, a_id=10, b_id=1))
     sdf.add_channel(Channel(tls_pd, http_pd, a_id=2, b_id=1))
@@ -234,6 +260,10 @@ def main() -> None:
         sdf.add_channel(Channel(policy_pd, script_pd, a_id=3, b_id=1))
         sdf.add_channel(Channel(script_pd, http_pd, a_id=2, b_id=4))
         sdf.add_channel(Channel(http_pd, supervisor_pd, a_id=5, b_id=1))
+
+    if press_on:
+        sdf.add_channel(Channel(policy_pd, press_pd, a_id=4, b_id=1))
+        sdf.add_channel(Channel(press_pd, http_pd, a_id=2, b_id=6))
 
     for pd in [
         serial_driver,
@@ -248,7 +278,7 @@ def main() -> None:
         http_pd,
         policy_pd,
         connector_pd,
-    ] + ([supervisor_pd] if script_on else []):   # script_pd is nested inside supervisor_pd (child PD)
+    ] + ([supervisor_pd] if script_on else []) + ([press_pd] if press_on else []):   # script_pd is nested inside supervisor_pd (child PD)
         sdf.add_pd(pd)
 
     out_path = os.path.join(args.output, args.sdf)

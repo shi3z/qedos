@@ -13,6 +13,12 @@
  *   QED Script (only present in images built with QEDOS_SCRIPT=1):
  *   - VADDR_SHM_POLICY_SCRIPT (0x38000000): mapped ONLY in policy_pd and script_pd
  *   - VADDR_SHM_SCRIPT_HTTP   (0x39000000): mapped ONLY in script_pd and http_pd
+ *   QEDOS Press (only present in images built with QEDOS_PRESS=1):
+ *   - VADDR_SHM_POLICY_PRESS (0x3C000000): mapped ONLY in policy_pd and qedos_press_pd
+ *   - VADDR_SHM_PRESS_HTTP   (0x3D000000): mapped ONLY in qedos_press_pd and http_pd
+ *   qedos_press_pd has no other shared memory, no timer/IRQ/ioport/TCB caps, and exactly two
+ *   channels (policy_pd, http_pd) -- its signed static-content bundle is its own read-only `.rodata`
+ *   (see sel4/pds/qedos_press_pd.c), not a cross-PD shared region.
  */
 #ifndef PROOFGATE_SEL4_PG_SHM_H
 #define PROOFGATE_SEL4_PG_SHM_H
@@ -31,6 +37,8 @@
 #define VADDR_SHM_SCRIPT_HTTP   0x39000000ULL
 #define VADDR_SHM_HTTP_SUP      0x3A000000ULL   /* http_pd (rw) -> supervisor_pd (r): armed_seq/done_seq */
 #define VADDR_SHM_SUP_HTTP      0x3B000000ULL   /* supervisor_pd (rw) -> http_pd (r): abort_seq */
+#define VADDR_SHM_POLICY_PRESS  0x3C000000ULL
+#define VADDR_SHM_PRESS_HTTP    0x3D000000ULL
 
 #define PG_MAX_CONNS    4u
 _Static_assert(PG_MAX_CONNS == 4u, "must equal pg_ipc::MAX_CONNS (crates/pg-ipc/src/lib.rs)");
@@ -133,6 +141,7 @@ typedef struct {
 #define PG_DECISION_HEALTH  1u
 #define PG_DECISION_FORWARD 2u
 #define PG_DECISION_SCRIPT  3u /* QED Script dispatch (QEDOS_SCRIPT builds only) */
+#define PG_DECISION_PRESS   4u /* QEDOS Press dispatch (QEDOS_PRESS builds only) */
 
 typedef struct {
     volatile uint32_t req_seq;       /* Incremented by http_pd when a request is ready */
@@ -264,5 +273,41 @@ typedef struct {
 typedef struct {
     volatile uint32_t abort_seq;   /* supervisor_pd: incremented after it restarted script_pd */
 } pg_shm_sup_http_t;
+
+/* =========================================================================
+ * 9. QEDOS Press (QEDOS_PRESS=1 images only)
+ *    shm_policy_press: approved static-content request (policy_pd -> qedos_press_pd)
+ *    shm_press_http:   response                        (qedos_press_pd -> http_pd)
+ *    qedos_press_pd has NO other shared memory, NO timer/IRQ/ioport/TCB caps, and exactly two
+ *    channels. Its signed content bundle is embedded as read-only `.rodata` in its own ELF, not a
+ *    shared region (see sel4/pds/qedos_press_pd.c).
+ * ========================================================================= */
+#define PG_PRESS_BODY_MAX 32768u
+
+typedef struct {
+    volatile uint32_t req_seq;   /* policy_pd increments when a press request is ready */
+    volatile uint32_t ack_seq;   /* qedos_press_pd sets to req_seq when consumed */
+    volatile uint8_t  slot;
+    volatile uint8_t  method;
+    volatile uint8_t  keep_alive;
+    uint8_t           _pad0;
+    volatile uint16_t target_len;
+    uint16_t          _pad1;
+    uint8_t           target[PG_MAX_TARGET];
+} pg_shm_policy_press_t;
+
+typedef struct {
+    volatile uint32_t resp_seq;  /* qedos_press_pd increments when a result is ready */
+    volatile uint32_t resp_ack;  /* http_pd sets to resp_seq once copied out */
+    volatile uint8_t  slot;
+    volatile uint8_t  keep_alive;
+    volatile uint8_t  ctype;     /* 0 html, 1 css, 2 js, 3 json, 4 plain, 5 octet-stream */
+    uint8_t           _pad0;
+    volatile uint16_t status;
+    uint16_t          _pad1;
+    volatile uint32_t body_len;    /* bytes actually copied into body[] (0 for HEAD) */
+    volatile uint32_t content_len; /* true resource length, for Content-Length on HEAD responses */
+    uint8_t           body[PG_PRESS_BODY_MAX];
+} pg_shm_press_http_t;
 
 #endif /* PROOFGATE_SEL4_PG_SHM_H */

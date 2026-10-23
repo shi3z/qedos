@@ -140,6 +140,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pg-press"
+version = "0.1.0"
+dependencies = [
+ "pg-config",
+]
+
+[[package]]
 name = "pg-proxy"
 version = "0.1.0"
 dependencies = [
@@ -168,6 +175,7 @@ dependencies = [
  "pg-config",
  "pg-script",
  "pg-script-policy",
+ "pg-script-proofcheck",
  "pg-script-verify",
 ]
 

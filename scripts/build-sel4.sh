@@ -20,6 +20,8 @@ case "$ARCH" in
     ECHO_DIR="$R/build/echo"
     OUT="$R/build/sel4"
     [ "${QEDOS_SCRIPT:-0}" = 1 ] && OUT="$R/build/sel4-script"   # never clobber the baseline image
+    [ "${QEDOS_PRESS:-0}" = 1 ] && OUT="$R/build/sel4-press"
+    [ "${QEDOS_SCRIPT:-0}" = 1 ] && [ "${QEDOS_PRESS:-0}" = 1 ] && OUT="$R/build/sel4-script-press"
     [ -n "${QEDOS_OUT:-}" ] && OUT="$QEDOS_OUT"                  # explicit override (e.g. rebuild-from-source checks)
     ;;
   aarch64)
@@ -91,17 +93,26 @@ for pd in http_pd policy_pd connector_pd; do
     -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/${pd}.elf"
 done
 
-# 7b. QED Script PD (opt-in: QEDOS_SCRIPT=1). Separate Rust staticlib => the Wasm interpreter is linked
-#     into script_pd.elf ONLY. Policy/HTTP PDs above are rebuilt with -DQEDOS_SCRIPT for the dispatch glue.
-if [ "${QEDOS_SCRIPT:-0}" = 1 ]; then
-  cargo build --manifest-path "$R/sel4/rust_script/Cargo.toml" --target "$RUST_TARGET" --release
-  RUST_SCRIPT_A="$R/sel4/rust_script/target/$RUST_TARGET/release/libpg_sel4_script.a"
+# 7b. Feature dispatch glue (opt-in: QEDOS_SCRIPT=1 and/or QEDOS_PRESS=1, independently combinable).
+#     Policy/HTTP PDs are rebuilt once with whichever -DQEDOS_* defines are active, so both features'
+#     dispatch branches compile in together when both are requested.
+FEATURE_DEFS=""
+[ "${QEDOS_SCRIPT:-0}" = 1 ] && FEATURE_DEFS="$FEATURE_DEFS -DQEDOS_SCRIPT=1"
+[ "${QEDOS_PRESS:-0}" = 1 ] && FEATURE_DEFS="$FEATURE_DEFS -DQEDOS_PRESS=1"
+if [ -n "$FEATURE_DEFS" ]; then
   for pd in http_pd policy_pd; do
-    clang $COMMON_CFLAGS -DQEDOS_SCRIPT=1 -Isel4/libc_shim/include -c "$R/sel4/pds/${pd}.c" -o "$OUT/${pd}.o"
+    clang $COMMON_CFLAGS $FEATURE_DEFS -Isel4/libc_shim/include -c "$R/sel4/pds/${pd}.c" -o "$OUT/${pd}.o"
     ld.lld -L"$BOARD_DIR/lib" --start-group \
       "$OUT/${pd}.o" "$OUT/libc_shim.o" "$RUST_PDS_A" \
       -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/${pd}.elf"
   done
+fi
+
+# 7c. QED Script PD (opt-in: QEDOS_SCRIPT=1). Separate Rust staticlib => the Wasm interpreter is linked
+#     into script_pd.elf ONLY.
+if [ "${QEDOS_SCRIPT:-0}" = 1 ]; then
+  cargo build --manifest-path "$R/sel4/rust_script/Cargo.toml" --target "$RUST_TARGET" --release
+  RUST_SCRIPT_A="$R/sel4/rust_script/target/$RUST_TARGET/release/libpg_sel4_script.a"
   clang $COMMON_CFLAGS -DQEDOS_SCRIPT=1 ${QEDOS_SCRIPT_TEST_FAULT:+-DQEDOS_SCRIPT_TEST_FAULT=1} -Isel4/libc_shim/include -c "$R/sel4/pds/script_pd.c" -o "$OUT/script_pd.o"
   ld.lld -L"$BOARD_DIR/lib" --start-group \
     "$OUT/script_pd.o" "$OUT/libc_shim.o" "$RUST_SCRIPT_A" \
@@ -116,6 +127,16 @@ if [ "${QEDOS_SCRIPT:-0}" = 1 ]; then
   # the entry point baked into supervisor_pd.c must be script_pd's real ELF entry (restart would jump there)
   ENTRY=$(llvm-readelf -h "$OUT/script_pd.elf" 2>/dev/null | awk '/Entry point/ {print $4}')
   [ "$ENTRY" = "0x200000" ] || { echo "script_pd.elf entry point is $ENTRY, supervisor_pd.c expects 0x200000" >&2; exit 1; }
+fi
+
+# 7d. QEDOS Press PD (opt-in: QEDOS_PRESS=1). Separate Rust staticlib, linked into qedos_press_pd.elf ONLY.
+if [ "${QEDOS_PRESS:-0}" = 1 ]; then
+  cargo build --manifest-path "$R/sel4/rust_press/Cargo.toml" --target "$RUST_TARGET" --release
+  RUST_PRESS_A="$R/sel4/rust_press/target/$RUST_TARGET/release/libpg_sel4_press.a"
+  clang $COMMON_CFLAGS -DQEDOS_PRESS=1 -Isel4/libc_shim/include -c "$R/sel4/pds/qedos_press_pd.c" -o "$OUT/qedos_press_pd.o"
+  ld.lld -L"$BOARD_DIR/lib" --start-group \
+    "$OUT/qedos_press_pd.o" "$OUT/libc_shim.o" "$RUST_PRESS_A" \
+    -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/qedos_press_pd.elf"
 fi
 
 # 8. Generate `proofgate.system` and sDDF `.data` sections, then patch ELFs
@@ -154,6 +175,29 @@ llvm-objcopy --update-section .signed_config="$OUT/signed_config.data" "$OUT/pol
 if [ "${QEDOS_SCRIPT:-0}" = 1 ]; then
   "$R/scripts/pack-script-bundles.sh" "$OUT/script_bundles.data"
   llvm-objcopy --update-section .script_bundles="$OUT/script_bundles.data" "$OUT/script_pd.elf"
+fi
+
+# Inject the signed QPR1 release bundle into qedos_press_pd.elf `.press_bundle` ONLY (QEDOS_PRESS=1).
+# The bundle is Ed25519-verified at boot inside qedos_press_pd against the pinned dev press key
+# (config/keys/qedos-press-dev-pub.hex -- NOT production-grade; see docs/QEDOS_PRESS_CMS.md).
+if [ "${QEDOS_PRESS:-0}" = 1 ]; then
+  if [ ! -f "$R/config/dev/press-release.qpr" ]; then
+    QS="$R/build/qs/ws/target/release/qs"
+    [ -x "$QS" ] || "$R/scripts/qs-ws.sh" build --release -p pg-script-cli
+    mkdir -p "$R/config/dev"
+    python3 "$R/tools/press-release.py" \
+      --site-id 1 --release 1 \
+      --qs "$QS" --seed "$R/config/keys/qedos-press-dev-seed.hex" \
+      --out "$R/config/dev/press-release.qpr" \
+      "$R/examples/press-site"
+  fi
+  python3 - "$R/config/dev/press-release.qpr" "$OUT/press_bundle.data" <<'PY'
+import sys
+d = open(sys.argv[1], "rb").read()
+assert len(d) <= 262144, "release bundle exceeds qedos_press_pd .press_bundle (256 KiB)"
+open(sys.argv[2], "wb").write(d.ljust(262144, b"\0"))
+PY
+  llvm-objcopy --update-section .press_bundle="$OUT/press_bundle.data" "$OUT/qedos_press_pd.elf"
 fi
 
 # Inject TLS cert/key into `tls_pd.elf` `.tls_keystore` section ONLY (LAW_008)

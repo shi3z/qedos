@@ -31,3 +31,4 @@ __pycache__/
 *.pyc
 /examples/malicious/out/
 /sel4/rust_script/target/
+/sel4/rust_press/target/

@@ -24,6 +24,12 @@ extern size_t pg_rust_format_script_response(uint16_t status, uint8_t ctype, uin
                                              const uint8_t *body_ptr, size_t body_len,
                                              uint8_t *out_ptr, size_t out_cap);
 #endif
+#ifdef QEDOS_PRESS
+#define CH_HTTP_PRESS 6
+extern size_t pg_rust_format_press_response(uint16_t status, uint8_t ctype, uint8_t keep_alive,
+                                            const uint8_t *body_ptr, size_t body_len, uint32_t content_len,
+                                            uint8_t *out_ptr, size_t out_cap);
+#endif
 
 extern int32_t pg_rust_parse_http_request(
     const uint8_t *buf_ptr,
@@ -102,6 +108,15 @@ static void sup_done(void)
     microkit_notify(CH_HTTP_SUP);
 }
 #endif
+#ifdef QEDOS_PRESS
+static pg_shm_press_http_t *shm_press_http = (pg_shm_press_http_t *)VADDR_SHM_PRESS_HTTP;
+static uint32_t last_press_resp = 0;
+/* The ONE press request currently in flight, as known by this PD from policy_pd's decision. Accepted
+ * only for exactly this (slot, connection generation) and only once -- same correlation discipline as
+ * script_inflight above, applied here even though qedos_press_pd runs no untrusted code: defense in
+ * depth against a bug in this glue re-delivering a stale response into the wrong client's stream. */
+static pg_ipc_inflight_t press_inflight;
+#endif
 
 /* Connection generations of all slots, for the pg-ipc correlation checks. */
 static void conn_ids_snapshot(uint32_t out[PG_MAX_CONNS])
@@ -148,6 +163,9 @@ static void process_slot_requests(uint8_t s)
         pg_ipc_inflight_cancel_slot(&fwd_inflight, s);
 #ifdef QEDOS_SCRIPT
         pg_ipc_inflight_cancel_slot(&script_inflight, s);
+#endif
+#ifdef QEDOS_PRESS
+        pg_ipc_inflight_cancel_slot(&press_inflight, s);
 #endif
         return;
     }
@@ -295,6 +313,13 @@ static void check_policy_completion(void)
         }
     }
 #endif
+#ifdef QEDOS_PRESS
+    else if (dec == PG_DECISION_PRESS) {
+        uint32_t ids[PG_MAX_CONNS];
+        conn_ids_snapshot(ids);
+        (void)pg_ipc_inflight_record(&press_inflight, s, ids);
+    }
+#endif
     else if (dec == PG_DECISION_FORWARD) {
         uint32_t ids[PG_MAX_CONNS];
         conn_ids_snapshot(ids);
@@ -409,6 +434,57 @@ static void check_supervisor_abort(void)
 }
 #endif
 
+#ifdef QEDOS_PRESS
+static uint8_t press_http_buf[PG_PRESS_BODY_MAX + 1024u];
+static uint8_t press_body_copy[PG_PRESS_BODY_MAX];
+
+static void check_press_response(void)
+{
+    uint32_t rseq = shm_press_http->resp_seq;
+    if (rseq == last_press_resp) {
+        return;
+    }
+    last_press_resp = rseq;
+    /* The decision notification from policy_pd may not have been processed yet on another core. */
+    check_policy_completion();
+
+    /* Snapshot every press-controlled scalar exactly once (no double fetch). */
+    uint8_t  s           = shm_press_http->slot;
+    uint8_t  ka          = shm_press_http->keep_alive;
+    uint8_t  ctype       = shm_press_http->ctype;
+    uint32_t len         = shm_press_http->body_len;
+    uint32_t content_len = shm_press_http->content_len;
+    uint16_t status      = shm_press_http->status;
+    PG_FENCE();
+    shm_press_http->resp_ack = rseq;
+    PG_FENCE();
+
+    /* Accept only the response to the request that is actually in flight, once. */
+    uint32_t ids[PG_MAX_CONNS];
+    conn_ids_snapshot(ids);
+    if (!pg_ipc_inflight_accept(&press_inflight, s, ids)) {
+        return;
+    }
+    size_t rlen = 0;
+    if (status >= 200 && status <= 599 && len <= PG_PRESS_BODY_MAX && content_len <= PG_PRESS_BODY_MAX) {
+        for (uint32_t i = 0; i < len; i++) { press_body_copy[i] = shm_press_http->body[i]; }
+        rlen = pg_rust_format_press_response(status, ctype, ka, press_body_copy, len, content_len,
+                                             press_http_buf, sizeof(press_http_buf));
+    }
+    slot_state[s].awaiting_backend = 0;
+    if (rlen == 0) {
+        uint8_t resp[256];
+        rlen = pg_rust_format_local_response(502, 0, 0, 0, resp, sizeof(resp));
+        send_resp_to_tls(s, resp, rlen, 1);
+    } else {
+        send_resp_to_tls(s, press_http_buf, rlen, ka ? 0 : 1);
+    }
+    if (ka) {
+        process_slot_requests(s);
+    }
+}
+#endif
+
 void init(void)
 {
     microkit_dbg_puts("HTTP_PD: initialized (no_std Rust pg-http, forbid(unsafe_code))\n");
@@ -425,6 +501,10 @@ void notified(microkit_channel ch)
         check_script_response();
     } else if (ch == CH_HTTP_SUP) {
         check_supervisor_abort();
+#endif
+#ifdef QEDOS_PRESS
+    } else if (ch == CH_HTTP_PRESS) {
+        check_press_response();
 #endif
     } else if (ch == CH_HTTP_TLS) {
         for (uint8_t s = 0; s < PG_MAX_CONNS; s++) {

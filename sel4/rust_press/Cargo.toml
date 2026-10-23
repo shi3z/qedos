@@ -1,0 +1,21 @@
+[package]
+name = "pg-sel4-press"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+name = "pg_sel4_press"
+crate-type = ["staticlib"]
+
+[dependencies]
+pg-config = { path = "../../crates/pg-config" }
+pg-press = { path = "../../crates/pg-press" }
+
+[profile.release]
+opt-level = 2
+panic = "abort"
+overflow-checks = true
+lto = true
+codegen-units = 1

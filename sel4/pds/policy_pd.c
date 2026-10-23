@@ -21,6 +21,10 @@
 #define CH_POLICY_SCRIPT 3
 extern uint8_t pg_rust_is_script_route(uint8_t method_u8, const uint8_t *target_ptr, size_t target_len);
 #endif
+#ifdef QEDOS_PRESS
+#define CH_POLICY_PRESS 4
+extern uint8_t pg_rust_is_press_route(const uint8_t *target_ptr, size_t target_len);
+#endif
 
 extern int32_t pg_rust_policy_init(
     const uint8_t *blob_ptr,
@@ -52,6 +56,9 @@ static pg_shm_policy_conn_t *shm_policy_conn = (pg_shm_policy_conn_t *)VADDR_SHM
 static uint32_t last_req_seq = 0;
 #ifdef QEDOS_SCRIPT
 static pg_shm_policy_script_t *shm_policy_script = (pg_shm_policy_script_t *)VADDR_SHM_POLICY_SCRIPT;
+#endif
+#ifdef QEDOS_PRESS
+static pg_shm_policy_press_t *shm_policy_press = (pg_shm_policy_press_t *)VADDR_SHM_POLICY_PRESS;
 #endif
 
 void init(void)
@@ -142,6 +149,46 @@ void notified(microkit_channel ch)
         PG_FENCE();
         microkit_notify(CH_POLICY_SCRIPT);
         microkit_notify(CH_POLICY_HTTP);   /* http_pd records the in-flight script request from this decision */
+        return;
+    }
+#endif
+
+#ifdef QEDOS_PRESS
+    /* QEDOS Press dispatch: any method on a /press path goes to qedos_press_pd, which answers 200/404/405
+     * itself (GET/HEAD against a known path => 200; known path, other method => 405; unknown => 404).
+     * Only when the signed config was verified (fail closed), same gate as the QED Script branch. */
+    if (shm_policy_conn->config_verified &&
+        pg_rust_is_press_route(shm_http_policy->target, shm_http_policy->target_len)) {
+        if (shm_policy_press->req_seq != shm_policy_press->ack_seq) {
+            /* qedos_press_pd busy (or dead): shed load instead of queueing; proxying is unaffected. */
+            shm_http_policy->decision = PG_DECISION_REJECT;
+            shm_http_policy->backend_id = 0;
+            shm_http_policy->reject_status = 503;
+            PG_FENCE();
+            shm_http_policy->ack_seq = rseq;
+            PG_FENCE();
+            microkit_notify(CH_POLICY_HTTP);
+            return;
+        }
+        uint16_t plen = shm_http_policy->target_len;
+        if (plen > PG_MAX_TARGET) { plen = PG_MAX_TARGET; }
+        /* Whole-buffer overwrite: bytes of an earlier client's request never remain readable by
+         * qedos_press_pd beyond the current request's length. */
+        for (uint32_t i = 0; i < PG_MAX_TARGET; i++) { shm_policy_press->target[i] = (i < plen) ? shm_http_policy->target[i] : 0; }
+        shm_policy_press->target_len = plen;
+        shm_policy_press->method = shm_http_policy->method;
+        shm_policy_press->slot = shm_http_policy->slot;
+        shm_policy_press->keep_alive = shm_http_policy->keep_alive;
+        shm_http_policy->decision = PG_DECISION_PRESS;
+        shm_http_policy->backend_id = 0;
+        shm_http_policy->reject_status = 0;
+        PG_FENCE();
+        shm_http_policy->ack_seq = rseq;
+        PG_FENCE();
+        shm_policy_press->req_seq = shm_policy_press->req_seq + 1;
+        PG_FENCE();
+        microkit_notify(CH_POLICY_PRESS);
+        microkit_notify(CH_POLICY_HTTP);   /* http_pd records the in-flight press request from this decision */
         return;
     }
 #endif

@@ -1,0 +1,9 @@
+[package]
+name = "pg-press"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "QEDOS Press: signed static-content release bundle format, Ed25519-verified, no_std, zero alloc"
+
+[dependencies]
+pg-config = { path = "../pg-config" }

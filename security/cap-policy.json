@@ -319,9 +319,55 @@
    },
    "priority": 93,
    "optional": true
+  },
+  "qedos_press_pd": {
+   "signal": [
+    "http_pd",
+    "policy_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "shm_policy_press": "rw",
+    "shm_press_http": "rw"
+   },
+   "other_caps": [],
+   "priority": 92,
+   "rationale": "Serves read-only static content from a signed release bundle (GET/HEAD only). Two shared regions and two notification channels (policy_pd request in, http_pd response out). No secrets, no hardware, no children, no TCB cap over it (unlike script_pd, it has no supervisor parent -- documented gap, not an oversight: it runs no untrusted code, so the fault-containment need that motivated script_pd's supervisor does not apply the same way). Its content bundle is embedded as read-only .rodata in its own ELF, not a mapped shared region.",
+   "interface_pds": [
+    "http_pd",
+    "policy_pd",
+    "monitor"
+   ],
+   "optional": true
   }
  },
  "features": {
+  "press": {
+   "requires_pd": "qedos_press_pd",
+   "add": {
+    "http_pd": {
+     "signal": [
+      "qedos_press_pd"
+     ],
+     "maps": {
+      "shm_press_http": "rw"
+     }
+    },
+    "policy_pd": {
+     "signal": [
+      "qedos_press_pd"
+     ],
+     "maps": {
+      "shm_policy_press": "rw"
+     }
+    }
+   }
+  },
   "script": {
    "requires_pd": "script_pd",
    "add": {

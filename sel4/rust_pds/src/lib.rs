@@ -775,3 +775,77 @@ pub unsafe extern "C" fn pg_rust_format_script_response(
     push(body);
     if ok { pos } else { 0 }
 }
+
+// ============================================================================
+// 6. QEDOS Press glue used by policy_pd / http_pd (only the route-prefix check and response
+//    formatter; the signed-bundle verifier and lookup live in sel4/rust_press, linked ONLY into
+//    qedos_press_pd -- see that crate).
+// ============================================================================
+
+/// 1 iff `target` starts with the `/press` mount prefix (LAW-style path hygiene: exact prefix match
+/// only, no normalization games -- `policy_pd` forwards the request unchanged to qedos_press_pd,
+/// which does its own full lookup against the signed manifest).
+#[no_mangle]
+pub unsafe extern "C" fn pg_rust_is_press_route(target_ptr: *const u8, target_len: usize) -> u8 {
+    if target_ptr.is_null() {
+        return 0;
+    }
+    let target = core::slice::from_raw_parts(target_ptr, target_len);
+    (target.len() >= 6 && &target[..6] == b"/press" && (target.len() == 6 || target[6] == b'/')) as u8
+}
+
+/// Frame a QEDOS Press result as an HTTP/1.1 response. Mirrors `pg_rust_format_script_response`'s
+/// injection-safety argument (fixed strings + re-validated status + a small closed content-type
+/// selector), extended with the 6 content types static files need and a separate `content_len` for
+/// HEAD responses (whose `body_len` is always 0 but whose `Content-Length` must reflect the real
+/// resource size).
+#[no_mangle]
+pub unsafe extern "C" fn pg_rust_format_press_response(
+    status: u16,
+    ctype: u8,
+    keep_alive: u8,
+    body_ptr: *const u8,
+    body_len: usize,
+    content_len: u32,
+    out_ptr: *mut u8,
+    out_cap: usize,
+) -> usize {
+    if out_ptr.is_null()
+        || (body_len > 0 && body_ptr.is_null())
+        || !(200..=599).contains(&status)
+        || (matches!(status, 204 | 205 | 304) && body_len > 0)
+    {
+        return 0;
+    }
+    let out = core::slice::from_raw_parts_mut(out_ptr, out_cap);
+    let body: &[u8] = if body_len == 0 { &[] } else { core::slice::from_raw_parts(body_ptr, body_len) };
+    let reported_len: u32 = if status == 200 { content_len } else { body.len() as u32 };
+    let mut pos = 0usize;
+    let mut ok = true;
+    let mut push = |s: &[u8]| {
+        if ok && pos + s.len() <= out.len() {
+            out[pos..pos + s.len()].copy_from_slice(s);
+            pos += s.len();
+        } else {
+            ok = false;
+        }
+    };
+    push(b"HTTP/1.1 ");
+    push(&[b'0' + ((status / 100) % 10) as u8, b'0' + ((status / 10) % 10) as u8, b'0' + (status % 10) as u8, b' ']);
+    push(pg_http::reason_phrase(status).as_bytes());
+    push(b"\r\nContent-Type: ");
+    push(match ctype {
+        0 => b"text/html; charset=utf-8" as &[u8],
+        1 => b"text/css; charset=utf-8",
+        2 => b"application/javascript; charset=utf-8",
+        3 => b"application/json",
+        5 => b"application/octet-stream",
+        _ => b"text/plain; charset=utf-8",
+    });
+    push(b"\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; sandbox\r\nContent-Length: ");
+    let mut num = [0u8; 10];
+    push(format_u32_ascii(reported_len, &mut num));
+    push(if keep_alive != 0 { b"\r\nConnection: keep-alive\r\n\r\n" } else { b"\r\nConnection: close\r\n\r\n" });
+    push(body);
+    if ok { pos } else { 0 }
+}
