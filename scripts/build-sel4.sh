@@ -200,13 +200,17 @@ PY
   llvm-objcopy --update-section .press_bundle="$OUT/press_bundle.data" "$OUT/qedos_press_pd.elf"
 fi
 
-# Inject TLS cert/key into `tls_pd.elf` `.tls_keystore` section ONLY (LAW_008)
-python3 - "$R/config/dev/cert.pem" "$R/config/dev/key.pem" "$OUT/tls_keystore.data" <<'PY'
+# Inject TLS cert/key into `tls_pd.elf` `.tls_keystore` section ONLY (LAW_008).
+# Override with QEDOS_TLS_CERT/QEDOS_TLS_KEY (e.g. a real CA cert kept outside the repo,
+# never committed) -- defaults to the committed dev cert/key, unchanged for every other build.
+TLS_CERT="${QEDOS_TLS_CERT:-$R/config/dev/cert.pem}"
+TLS_KEY="${QEDOS_TLS_KEY:-$R/config/dev/key.pem}"
+python3 - "$TLS_CERT" "$TLS_KEY" "$OUT/tls_keystore.data" <<'PY'
 import sys
 cert = open(sys.argv[1], "rb").read()
 key = open(sys.argv[2], "rb").read()
-assert len(cert) < 2048 and len(key) < 2048
-open(sys.argv[3], "wb").write(cert.ljust(2048, b"\x00") + key.ljust(2048, b"\x00"))
+assert len(cert) < 6144 and len(key) < 2048
+open(sys.argv[3], "wb").write(cert.ljust(6144, b"\x00") + key.ljust(2048, b"\x00"))
 PY
 llvm-objcopy --update-section .tls_keystore="$OUT/tls_keystore.data" "$OUT/tls_pd.elf"
 

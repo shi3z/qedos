@@ -32,3 +32,8 @@ __pycache__/
 /examples/malicious/out/
 /sel4/rust_script/target/
 /sel4/rust_press/target/
+
+# Real (non-dev) TLS material -- e.g. a Let's Encrypt cert/key for an actual public
+# deployment -- must never be committed. config/dev/* (the dev self-signed cert/key)
+# stays committed on purpose; config/local/* never does.
+/config/local/

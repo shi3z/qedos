@@ -26,8 +26,13 @@
 #define CH_TLS_TCP  1
 #define CH_TLS_HTTP 2
 
+/* cert_pem is sized to hold a leaf cert plus one intermediate CA (a real public CA chain,
+ * e.g. Let's Encrypt leaf+intermediate, is a few KB -- the committed dev self-signed cert is
+ * much smaller and still fits). key_pem stays small (EC/RSA private keys are far under 2KB).
+ * cert_pem + key_pem == 8192 == the tls_keystore MemoryRegion size (meta_proofgate.py) exactly;
+ * do not grow either field without growing that region to match. */
 typedef struct {
-    char cert_pem[2048];
+    char cert_pem[6144];
     char key_pem[2048];
 } pg_tls_keystore_t;
 
@@ -374,6 +379,19 @@ void init(void)
 
     BIO *cbio = BIO_new_mem_buf(ks->cert_pem, (int)strlen(ks->cert_pem));
     X509 *cert = PEM_read_bio_X509(cbio, NULL, NULL, NULL);
+    /* cert_pem may hold a leaf cert followed by one or more intermediate CA certs (a real
+     * public-CA chain, e.g. Let's Encrypt). A client validating against its own trusted root
+     * store does not trust intermediates directly, so every cert after the leaf must be sent
+     * too. The committed dev self-signed cert has no intermediates, so this loop reads nothing
+     * further for it -- a no-op for that case, not a behavior change for existing builds. */
+    X509 *chain_cert;
+    while ((chain_cert = PEM_read_bio_X509(cbio, NULL, NULL, NULL)) != NULL) {
+        if (SSL_CTX_add_extra_chain_cert(g_ssl_ctx, chain_cert) != 1) {
+            X509_free(chain_cert); /* ownership stays with us only on failure to add */
+            break;
+        }
+        /* on success, SSL_CTX_add_extra_chain_cert takes ownership -- do not free */
+    }
     BIO_free(cbio);
 
     BIO *kbio = BIO_new_mem_buf(ks->key_pem, (int)strlen(ks->key_pem));
