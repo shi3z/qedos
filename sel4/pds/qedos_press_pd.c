@@ -45,7 +45,11 @@ static pg_shm_press_http_t   *shm_press_http   = (pg_shm_press_http_t *)VADDR_SH
 static uint8_t req_target[PG_MAX_TARGET];
 static uint8_t resp_body[PG_PRESS_BODY_MAX];
 
-static uint32_t last_req_seq = 0;
+/* One independent request watermark per connection slot: up to PG_MAX_CONNS requests may be
+ * genuinely concurrent (see pg_shm.h's pg_shm_policy_press_t/pg_shm_press_http_t comment). Each is
+ * still handled synchronously, one at a time, inside a single notified() call -- there is no
+ * parallelism inside this PD itself, only no single slot blocking any other. */
+static uint32_t last_req_seq[PG_MAX_CONNS];
 static uint32_t press_ready = 0;
 
 static void put_u32(uint32_t v)
@@ -64,10 +68,13 @@ static void reset_state(void)
     for (size_t i = 0; i < sizeof(req_target); i++) { req_target[i] = 0; }
     for (size_t i = 0; i < sizeof(resp_body); i++) { resp_body[i] = 0; }
     press_ready = 0;
-    last_req_seq = shm_policy_press->req_seq;
-    PG_FENCE();
-    shm_policy_press->ack_seq = last_req_seq;
-    shm_press_http->body_len = 0;
+    for (uint8_t s = 0; s < PG_MAX_CONNS; s++) {
+        uint32_t rseq = shm_policy_press->slots[s].req_seq;
+        last_req_seq[s] = rseq;
+        PG_FENCE();
+        shm_policy_press->slots[s].ack_seq = rseq;
+        shm_press_http->slots[s].body_len = 0;
+    }
     PG_FENCE();
 }
 
@@ -90,40 +97,46 @@ void notified(microkit_channel ch)
     if (ch != CH_PRESS_POLICY) {
         return;
     }
-    uint32_t rseq = shm_policy_press->req_seq;
-    if (rseq == last_req_seq) {
-        return;
+    /* Drain every connection slot that has a fresh, approved request. Each is handled synchronously
+     * and in full before moving to the next (no parallelism inside this PD), but no slot waits on
+     * any other, and none of this PD's two shared regions or capabilities grow per slot beyond the
+     * fixed PG_MAX_CONNS arrays already sized into them. */
+    for (uint8_t slot = 0; slot < PG_MAX_CONNS; slot++) {
+        pg_policy_press_slot_t *req = &shm_policy_press->slots[slot];
+        uint32_t rseq = req->req_seq;
+        if (rseq == last_req_seq[slot]) {
+            continue;
+        }
+        last_req_seq[slot] = rseq;
+
+        /* Copy the approved request out of shared memory first (no TOCTOU on shared memory). */
+        uint16_t tlen = req->target_len;
+        if (tlen > PG_MAX_TARGET) { tlen = PG_MAX_TARGET; }
+        for (uint16_t i = 0; i < tlen; i++) { req_target[i] = req->target[i]; }
+        uint8_t method = req->method;
+        uint8_t ka = req->keep_alive;
+
+        uint16_t status = 503;
+        uint8_t ctype = 0;
+        uint32_t content_len = 0;
+        size_t n = 0;
+        if (press_ready) {
+            n = pg_press_handle(method, req_target, tlen, resp_body, sizeof(resp_body), &status, &ctype, &content_len);
+        }
+        if (n > PG_PRESS_BODY_MAX) { n = PG_PRESS_BODY_MAX; }
+
+        pg_press_http_slot_t *resp = &shm_press_http->slots[slot];
+        for (size_t i = 0; i < n; i++) { resp->body[i] = resp_body[i]; }
+        resp->body_len = (uint32_t)n;
+        resp->content_len = content_len;
+        resp->status = status;
+        resp->ctype = ctype;
+        resp->keep_alive = ka;
+        PG_FENCE();
+        resp->resp_seq = resp->resp_seq + 1;
+        PG_FENCE();
+        req->ack_seq = rseq;   /* this slot free again */
+        PG_FENCE();
+        microkit_notify(CH_PRESS_HTTP);
     }
-    last_req_seq = rseq;
-
-    /* Copy the approved request out of shared memory first (no TOCTOU on shared memory). */
-    uint16_t tlen = shm_policy_press->target_len;
-    if (tlen > PG_MAX_TARGET) { tlen = PG_MAX_TARGET; }
-    for (uint16_t i = 0; i < tlen; i++) { req_target[i] = shm_policy_press->target[i]; }
-    uint8_t method = shm_policy_press->method;
-    uint8_t slot = shm_policy_press->slot;
-    uint8_t ka = shm_policy_press->keep_alive;
-
-    uint16_t status = 503;
-    uint8_t ctype = 0;
-    uint32_t content_len = 0;
-    size_t n = 0;
-    if (press_ready) {
-        n = pg_press_handle(method, req_target, tlen, resp_body, sizeof(resp_body), &status, &ctype, &content_len);
-    }
-    if (n > PG_PRESS_BODY_MAX) { n = PG_PRESS_BODY_MAX; }
-
-    for (size_t i = 0; i < n; i++) { shm_press_http->body[i] = resp_body[i]; }
-    shm_press_http->body_len = (uint32_t)n;
-    shm_press_http->content_len = content_len;
-    shm_press_http->status = status;
-    shm_press_http->ctype = ctype;
-    shm_press_http->slot = slot;
-    shm_press_http->keep_alive = ka;
-    PG_FENCE();
-    shm_press_http->resp_seq = shm_press_http->resp_seq + 1;
-    PG_FENCE();
-    shm_policy_press->ack_seq = rseq;   /* request slot free again */
-    PG_FENCE();
-    microkit_notify(CH_PRESS_HTTP);
 }

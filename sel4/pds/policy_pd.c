@@ -159,8 +159,16 @@ void notified(microkit_channel ch)
      * Only when the signed config was verified (fail closed), same gate as the QED Script branch. */
     if (shm_policy_conn->config_verified &&
         pg_rust_is_press_route(shm_http_policy->target, shm_http_policy->target_len)) {
-        if (shm_policy_press->req_seq != shm_policy_press->ack_seq) {
-            /* qedos_press_pd busy (or dead): shed load instead of queueing; proxying is unaffected. */
+        uint8_t ps = shm_http_policy->slot;
+        if (ps >= PG_MAX_CONNS) {
+            return; /* never index shm_policy_press->slots[] with a value read from shared memory */
+        }
+        pg_policy_press_slot_t *req = &shm_policy_press->slots[ps];
+        if (req->req_seq != req->ack_seq) {
+            /* qedos_press_pd hasn't yet consumed this SAME connection slot's previous request (it
+             * runs no untrusted code and processes synchronously, so this is only reachable if this
+             * slot is reused for a new request before the prior one was drained -- each OTHER slot
+             * has its own independent record and is never shed because of this one being busy). */
             shm_http_policy->decision = PG_DECISION_REJECT;
             shm_http_policy->backend_id = 0;
             shm_http_policy->reject_status = 503;
@@ -174,18 +182,17 @@ void notified(microkit_channel ch)
         if (plen > PG_MAX_TARGET) { plen = PG_MAX_TARGET; }
         /* Whole-buffer overwrite: bytes of an earlier client's request never remain readable by
          * qedos_press_pd beyond the current request's length. */
-        for (uint32_t i = 0; i < PG_MAX_TARGET; i++) { shm_policy_press->target[i] = (i < plen) ? shm_http_policy->target[i] : 0; }
-        shm_policy_press->target_len = plen;
-        shm_policy_press->method = shm_http_policy->method;
-        shm_policy_press->slot = shm_http_policy->slot;
-        shm_policy_press->keep_alive = shm_http_policy->keep_alive;
+        for (uint32_t i = 0; i < PG_MAX_TARGET; i++) { req->target[i] = (i < plen) ? shm_http_policy->target[i] : 0; }
+        req->target_len = plen;
+        req->method = shm_http_policy->method;
+        req->keep_alive = shm_http_policy->keep_alive;
         shm_http_policy->decision = PG_DECISION_PRESS;
         shm_http_policy->backend_id = 0;
         shm_http_policy->reject_status = 0;
         PG_FENCE();
         shm_http_policy->ack_seq = rseq;
         PG_FENCE();
-        shm_policy_press->req_seq = shm_policy_press->req_seq + 1;
+        req->req_seq = req->req_seq + 1;
         PG_FENCE();
         microkit_notify(CH_POLICY_PRESS);
         microkit_notify(CH_POLICY_HTTP);   /* http_pd records the in-flight press request from this decision */

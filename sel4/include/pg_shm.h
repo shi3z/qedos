@@ -281,33 +281,50 @@ typedef struct {
  *    qedos_press_pd has NO other shared memory, NO timer/IRQ/ioport/TCB caps, and exactly two
  *    channels. Its signed content bundle is embedded as read-only `.rodata` in its own ELF, not a
  *    shared region (see sel4/pds/qedos_press_pd.c).
+ *
+ *    One independent slot per connection (PG_MAX_CONNS), mirroring shm_tls_http's slots[] pattern --
+ *    NOT a single global request/response record. A single shared record previously meant a second
+ *    concurrent /press/ paths request was shed (503) while the first was still being served, even though
+ *    http_pd/tcp_pd already support up to PG_MAX_CONNS real concurrent connections; this lets up to
+ *    PG_MAX_CONNS genuinely concurrent requests be served without shedding.
  * ========================================================================= */
 #define PG_PRESS_BODY_MAX 32768u
 
 typedef struct {
-    volatile uint32_t req_seq;   /* policy_pd increments when a press request is ready */
+    volatile uint32_t req_seq;   /* policy_pd increments when this slot's press request is ready */
     volatile uint32_t ack_seq;   /* qedos_press_pd sets to req_seq when consumed */
-    volatile uint8_t  slot;
     volatile uint8_t  method;
     volatile uint8_t  keep_alive;
     uint8_t           _pad0;
+    uint8_t           _pad1;
     volatile uint16_t target_len;
-    uint16_t          _pad1;
+    uint16_t          _pad2;
     uint8_t           target[PG_MAX_TARGET];
-} pg_shm_policy_press_t;
+} pg_policy_press_slot_t;
 
 typedef struct {
-    volatile uint32_t resp_seq;  /* qedos_press_pd increments when a result is ready */
+    pg_policy_press_slot_t slots[PG_MAX_CONNS];
+} pg_shm_policy_press_t;
+_Static_assert(sizeof(pg_shm_policy_press_t) <= 0x10000u, "shm_policy_press region too small");
+
+typedef struct {
+    volatile uint32_t resp_seq;  /* qedos_press_pd increments when this slot's result is ready */
     volatile uint32_t resp_ack;  /* http_pd sets to resp_seq once copied out */
-    volatile uint8_t  slot;
     volatile uint8_t  keep_alive;
     volatile uint8_t  ctype;     /* 0 html, 1 css, 2 js, 3 json, 4 plain, 5 octet-stream */
     uint8_t           _pad0;
+    uint8_t           _pad1;
     volatile uint16_t status;
-    uint16_t          _pad1;
+    uint16_t          _pad2;
     volatile uint32_t body_len;    /* bytes actually copied into body[] (0 for HEAD) */
     volatile uint32_t content_len; /* true resource length, for Content-Length on HEAD responses */
     uint8_t           body[PG_PRESS_BODY_MAX];
+} pg_press_http_slot_t;
+
+typedef struct {
+    pg_press_http_slot_t slots[PG_MAX_CONNS];
 } pg_shm_press_http_t;
+/* Keep this in sync with shm_press_http's MemoryRegion size in sel4/meta_proofgate.py (0x21000). */
+_Static_assert(sizeof(pg_shm_press_http_t) <= 0x21000u, "shm_press_http region too small");
 
 #endif /* PROOFGATE_SEL4_PG_SHM_H */

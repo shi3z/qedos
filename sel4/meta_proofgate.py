@@ -180,8 +180,10 @@ def main() -> None:
         sdf.add_mr(shm_sup_http)
 
     if press_on:
+        # Sized for PG_MAX_CONNS (4) independent per-connection slots, not one shared record (see
+        # pg_shm.h's pg_shm_policy_press_t/pg_shm_press_http_t _Static_assert against these sizes).
         shm_policy_press = MemoryRegion(sdf, "shm_policy_press", 0x10000)
-        shm_press_http = MemoryRegion(sdf, "shm_press_http", 0x10000)
+        shm_press_http = MemoryRegion(sdf, "shm_press_http", 0x21000)
         sdf.add_mr(shm_policy_press)
         sdf.add_mr(shm_press_http)
 

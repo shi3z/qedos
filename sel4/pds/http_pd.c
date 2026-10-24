@@ -110,12 +110,15 @@ static void sup_done(void)
 #endif
 #ifdef QEDOS_PRESS
 static pg_shm_press_http_t *shm_press_http = (pg_shm_press_http_t *)VADDR_SHM_PRESS_HTTP;
-static uint32_t last_press_resp = 0;
-/* The ONE press request currently in flight, as known by this PD from policy_pd's decision. Accepted
- * only for exactly this (slot, connection generation) and only once -- same correlation discipline as
- * script_inflight above, applied here even though qedos_press_pd runs no untrusted code: defense in
- * depth against a bug in this glue re-delivering a stale response into the wrong client's stream. */
-static pg_ipc_inflight_t press_inflight;
+/* One independent response-sequence watermark and in-flight tracker PER CONNECTION SLOT (unlike
+ * fwd_inflight/script_inflight, which are deliberately single-in-flight by design -- see
+ * docs/IPC_VERIFICATION.md). Up to PG_MAX_CONNS /press/ paths requests may be genuinely concurrent, each
+ * tracked by exactly (slot, connection generation) and accepted only once -- same correlation
+ * discipline as script_inflight, applied here even though qedos_press_pd runs no untrusted code:
+ * defense in depth against a bug in this glue re-delivering a stale response into the wrong client's
+ * stream. */
+static uint32_t last_press_resp[PG_MAX_CONNS];
+static pg_ipc_inflight_t press_inflight[PG_MAX_CONNS];
 #endif
 
 /* Connection generations of all slots, for the pg-ipc correlation checks. */
@@ -165,7 +168,7 @@ static void process_slot_requests(uint8_t s)
         pg_ipc_inflight_cancel_slot(&script_inflight, s);
 #endif
 #ifdef QEDOS_PRESS
-        pg_ipc_inflight_cancel_slot(&press_inflight, s);
+        pg_ipc_inflight_cancel_slot(&press_inflight[s], s);
 #endif
         return;
     }
@@ -292,7 +295,6 @@ static void check_policy_completion(void)
         size_t rlen = pg_rust_format_local_response(200, 1, is_head, ka, resp, sizeof(resp));
         slot_state[s].awaiting_backend = 0;
         send_resp_to_tls(s, resp, rlen, ka ? 0 : 1);
-        process_slot_requests(s);
     } else if (dec == PG_DECISION_REJECT) {
         uint16_t status = shm_http_policy->reject_status;
         uint8_t resp[256];
@@ -300,9 +302,6 @@ static void check_policy_completion(void)
         size_t rlen = pg_rust_format_local_response(status, 0, is_head, close_conn ? 0 : 1, resp, sizeof(resp));
         slot_state[s].awaiting_backend = 0;
         send_resp_to_tls(s, resp, rlen, close_conn);
-        if (!close_conn) {
-            process_slot_requests(s);
-        }
     }
 #ifdef QEDOS_SCRIPT
     else if (dec == PG_DECISION_SCRIPT) {
@@ -317,7 +316,7 @@ static void check_policy_completion(void)
     else if (dec == PG_DECISION_PRESS) {
         uint32_t ids[PG_MAX_CONNS];
         conn_ids_snapshot(ids);
-        (void)pg_ipc_inflight_record(&press_inflight, s, ids);
+        (void)pg_ipc_inflight_record(&press_inflight[s], s, ids);
     }
 #endif
     else if (dec == PG_DECISION_FORWARD) {
@@ -326,6 +325,20 @@ static void check_policy_completion(void)
         (void)pg_ipc_inflight_record(&fwd_inflight, s, ids);
     }
     /* If PG_DECISION_FORWARD, policy_pd notified connector_pd; wait for CH_HTTP_CONN */
+
+    /* shm_http_policy (the one request/response record shared with policy_pd, used by every
+     * decision path including /health) has just become free again. process_slot_requests()
+     * drains ts->req_buf into st->buf unconditionally, before checking whether policy_pd is
+     * busy -- so under truly simultaneous connections, other slots can already be holding a
+     * fully-buffered request that was never forwarded because this slot's request got there
+     * first, and nothing else ever retries them. Re-attempt every slot now: at most one claims
+     * the now-free channel (the rest see it busy again and get their own turn on the next
+     * completion), so this makes forward progress without changing shm_http_policy's
+     * deliberately single-in-flight design. Without this, N-way concurrent connections (N > 1)
+     * starve indefinitely past the first to be served. */
+    for (uint8_t i = 0; i < PG_MAX_CONNS; i++) {
+        process_slot_requests(i);
+    }
 }
 
 static void check_connector_response(void)
@@ -440,47 +453,52 @@ static uint8_t press_body_copy[PG_PRESS_BODY_MAX];
 
 static void check_press_response(void)
 {
-    uint32_t rseq = shm_press_http->resp_seq;
-    if (rseq == last_press_resp) {
-        return;
-    }
-    last_press_resp = rseq;
     /* The decision notification from policy_pd may not have been processed yet on another core. */
     check_policy_completion();
 
-    /* Snapshot every press-controlled scalar exactly once (no double fetch). */
-    uint8_t  s           = shm_press_http->slot;
-    uint8_t  ka          = shm_press_http->keep_alive;
-    uint8_t  ctype       = shm_press_http->ctype;
-    uint32_t len         = shm_press_http->body_len;
-    uint32_t content_len = shm_press_http->content_len;
-    uint16_t status      = shm_press_http->status;
-    PG_FENCE();
-    shm_press_http->resp_ack = rseq;
-    PG_FENCE();
+    /* Up to PG_MAX_CONNS slots may each have a freshly-answered, genuinely concurrent /press/
+     * request; drain every slot that has one, independently of the others. */
+    for (uint8_t s = 0; s < PG_MAX_CONNS; s++) {
+        pg_press_http_slot_t *rs = &shm_press_http->slots[s];
+        uint32_t rseq = rs->resp_seq;
+        if (rseq == last_press_resp[s]) {
+            continue;
+        }
+        last_press_resp[s] = rseq;
 
-    /* Accept only the response to the request that is actually in flight, once. */
-    uint32_t ids[PG_MAX_CONNS];
-    conn_ids_snapshot(ids);
-    if (!pg_ipc_inflight_accept(&press_inflight, s, ids)) {
-        return;
-    }
-    size_t rlen = 0;
-    if (status >= 200 && status <= 599 && len <= PG_PRESS_BODY_MAX && content_len <= PG_PRESS_BODY_MAX) {
-        for (uint32_t i = 0; i < len; i++) { press_body_copy[i] = shm_press_http->body[i]; }
-        rlen = pg_rust_format_press_response(status, ctype, ka, press_body_copy, len, content_len,
-                                             press_http_buf, sizeof(press_http_buf));
-    }
-    slot_state[s].awaiting_backend = 0;
-    if (rlen == 0) {
-        uint8_t resp[256];
-        rlen = pg_rust_format_local_response(502, 0, 0, 0, resp, sizeof(resp));
-        send_resp_to_tls(s, resp, rlen, 1);
-    } else {
-        send_resp_to_tls(s, press_http_buf, rlen, ka ? 0 : 1);
-    }
-    if (ka) {
-        process_slot_requests(s);
+        /* Snapshot every press-controlled scalar exactly once (no double fetch). */
+        uint8_t  ka          = rs->keep_alive;
+        uint8_t  ctype       = rs->ctype;
+        uint32_t len         = rs->body_len;
+        uint32_t content_len = rs->content_len;
+        uint16_t status      = rs->status;
+        PG_FENCE();
+        rs->resp_ack = rseq;
+        PG_FENCE();
+
+        /* Accept only the response to the request actually in flight for this slot, once. */
+        uint32_t ids[PG_MAX_CONNS];
+        conn_ids_snapshot(ids);
+        if (!pg_ipc_inflight_accept(&press_inflight[s], s, ids)) {
+            continue;
+        }
+        size_t rlen = 0;
+        if (status >= 200 && status <= 599 && len <= PG_PRESS_BODY_MAX && content_len <= PG_PRESS_BODY_MAX) {
+            for (uint32_t i = 0; i < len; i++) { press_body_copy[i] = rs->body[i]; }
+            rlen = pg_rust_format_press_response(status, ctype, ka, press_body_copy, len, content_len,
+                                                 press_http_buf, sizeof(press_http_buf));
+        }
+        slot_state[s].awaiting_backend = 0;
+        if (rlen == 0) {
+            uint8_t resp[256];
+            rlen = pg_rust_format_local_response(502, 0, 0, 0, resp, sizeof(resp));
+            send_resp_to_tls(s, resp, rlen, 1);
+        } else {
+            send_resp_to_tls(s, press_http_buf, rlen, ka ? 0 : 1);
+        }
+        if (ka) {
+            process_slot_requests(s);
+        }
     }
 }
 #endif
