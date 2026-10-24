@@ -3,12 +3,15 @@
 //! qs keygen <seed.hex> <pub.rs> <pub.hex>
 //! qs sign   --seed <seed.hex> <dir>            (reads app.wasm app.policy [app.proof], writes app.sig)
 //! qs raw-sign --seed <seed.hex> <file>         (generic Ed25519 over raw bytes, writes <file>.sig)
+//! qs raw-verify --pub <pub.hex> --sig <sig.hex-or-file> <file>  (generic Ed25519 verify; exit 0 =
+//!               valid, exit 1 = invalid -- used by tools/press-admin.py to verify an
+//!               already-signed QEDOS Press release bundle without ever touching a private key)
 //! qs verify [--pub <pub.hex>] <dir>
 //! qs run    [--pub <pub.hex>] [--method GET|POST] [--path P] [--query Q] [--body S | --body-file F]
 //!           [--content-type T] [--principal N] [--repeat N] [--mem-kb N] <dir>
 //!
 //! Execution inside the seL4 appliance happens in the Script PD; `run` is the host-side reference.
-use pg_config::{public_key_from_seed, sign_ed25519};
+use pg_config::{public_key_from_seed, sign_ed25519, verify_ed25519};
 use pg_script::{execute, Clock, Method, NoClock, Request};
 use pg_script_policy::Kv;
 use pg_script_verify::{load, signed_message, MSG_MAX, CODE_SIGNING_PUBLIC_KEY};
@@ -177,6 +180,19 @@ fn main() {
             let sig = sign_ed25519(&seed, &msg);
             fs::write(format!("{}.sig", a[3]), format!("{}\n", hex(&sig))).unwrap();
             println!("wrote {}.sig", a[3]);
+        }
+        Some("raw-verify") if a.len() == 6 && a[1] == "--pub" && a[3] == "--sig" => {
+            // qs raw-verify --pub <pub.hex> --sig <sig.hex> <file>
+            let pubkey: [u8; 32] = unhex(&fs::read_to_string(&a[2]).unwrap()).try_into().unwrap_or_else(|_| die("pub must be 32 bytes"));
+            let sig_hex = fs::read_to_string(&a[4]).unwrap();
+            let sig: [u8; 64] = unhex(sig_hex.trim()).try_into().unwrap_or_else(|_| die("sig must be 64 bytes"));
+            let msg = fs::read(&a[5]).unwrap();
+            if verify_ed25519(&pubkey, &msg, &sig) {
+                println!("OK");
+            } else {
+                eprintln!("raw-verify: signature INVALID");
+                exit(1);
+            }
         }
         Some("sign") => {
             let (mut seed_path, mut dir) = (None, None);

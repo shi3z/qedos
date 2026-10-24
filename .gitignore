@@ -12,6 +12,10 @@
 # unlike the rest of third_party/ (large downloaded toolchains) this one IS committed.
 !/third_party/noble-post-quantum/
 !/third_party/noble-post-quantum/**
+# Vendored qrcode-generator (kazuhikoarase, MIT) -- renders the TOTP enrollment QR code client-side
+# for tools/press-admin.py (see docs/QEDOS_PRESS_ADMIN.md). Small, pinned, committed on purpose.
+!/third_party/qrcode-generator/
+!/third_party/qrcode-generator/**
 
 # Build artifacts (keep formal verification & benchmark evidence)
 /build/*

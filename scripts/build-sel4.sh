@@ -255,6 +255,12 @@ if [ "${QEDOS_PRESS:-0}" = 1 ]; then
     PRESS_SITE_DIR="$R/examples/press-site-pq"
     PRESS_QPR="$R/config/dev/press-pq-release.qpr"
   fi
+  # QEDOS_PRESS_SITE_DIR/QEDOS_PRESS_QPR: explicit overrides (e.g. tools/press-admin.py publishing
+  # a draft, or a test using an isolated site copy) -- default is unchanged, so no existing
+  # invocation's behavior changes. Never overwrite the committed config/dev/*.qpr from a non-default
+  # site_dir; always route those through their own scratch .qpr path instead.
+  [ -n "${QEDOS_PRESS_SITE_DIR:-}" ] && PRESS_SITE_DIR="$QEDOS_PRESS_SITE_DIR"
+  [ -n "${QEDOS_PRESS_QPR:-}" ] && PRESS_QPR="$QEDOS_PRESS_QPR"
   if [ ! -f "$PRESS_QPR" ]; then
     QS="$R/build/qs/ws/target/release/qs"
     [ -x "$QS" ] || "$R/scripts/qs-ws.sh" build --release -p pg-script-cli
