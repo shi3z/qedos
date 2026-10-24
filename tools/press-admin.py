@@ -7,16 +7,27 @@ read-only and minimal as it is documented in docs/QEDOS_PRESS_CMS.md ("no write 
 kind"). Everything "CMS" (login, draft, publish) happens here, in an ordinary host process,
 entirely outside the seL4 TCB -- see docs/QEDOS_PRESS_ADMIN.md.
 
-Publishing does NOT touch any running QEMU instance, firewall rule, or socat relay. It writes the
-new page into examples/press-site/index.html, re-signs a release bundle with the existing Ed25519
-dev key (tools/press-release.py + the existing `qs raw-sign` subcommand -- no new crypto), and
-rebuilds a fresh seL4 image via scripts/build-sel4.sh. Deploying that new image (swapping it in for
-whatever is currently live) is a separate, deliberate operator action.
+This host NEVER reads, holds, or uses any Ed25519 signing private key, in any form -- that
+boundary was a deliberate, user-mandated design correction (see docs/QEDOS_PRESS_ADMIN.md's
+"signing-key boundary" section). The `/edit` page only stages a draft for preview; it never signs
+or publishes anything. The real "publish" action is `/inbox`: verify an ALREADY-SIGNED `.qpr`
+bundle (signed elsewhere, on a separate machine, with tools/press-sign-offline.py) against the
+configured production PUBLIC key, check its release-generation number against the highest ever
+previously accepted (rollback/replay protection), and only then build a fresh seL4 image from the
+verbatim bytes via scripts/build-sel4.sh with QEDOS_PRESS_PROD=1 -- the same public-key file used
+for both the host-side check and the seL4 image's own compile-time-embedded trust key (see
+docs/QEDOS_PRESS_PROD_KEY.md). This does NOT touch any running QEMU instance, firewall rule, or
+socat relay; deploying the freshly-built image (swapping it in for whatever is currently live) is
+a separate, deliberate operator action.
 
 stdlib only. No new pip dependency.
 
 Usage:
   python3 tools/press-admin.py --set-password         interactive: set/replace the admin password
+  python3 tools/press-admin.py --enroll-totp           interactive: enroll a TOTP 2FA secret
+  python3 tools/press-admin.py --show-pubkey-fingerprint   print the sha256 fingerprint of the
+      configured production public key file, for cross-checking against the fingerprint
+      scripts/build-sel4.sh prints for the same file during a QEDOS_PRESS_PROD=1 build
   python3 tools/press-admin.py [--bind 127.0.0.1] [--port 8900] [--passwd-file PATH]
                                 [--site-dir PATH] [--repo-root PATH]
       runs the admin web UI (loopback-only by default; never bind a public interface here --
@@ -264,6 +275,23 @@ def parse_qpr_header(blob: bytes):
             "release_no": release_no, "publish_ts": publish_ts, "content_len": content_len}
 
 
+def pubkey_fingerprint(pubkey_hex_file: str) -> str:
+    """SHA-256 of the raw 32 pubkey bytes, hex. Lets an operator visually confirm this host's
+    verification key and the key scripts/build-sel4.sh's QEDOS_PRESS_PROD=1 mode embeds into the
+    seL4 image are the identical bytes (both print this same fingerprint for the same file) --
+    see docs/QEDOS_PRESS_PROD_KEY.md requirement 2. Returns None if the file doesn't exist yet."""
+    if not os.path.exists(pubkey_hex_file):
+        return None
+    hexstr = open(pubkey_hex_file).read().strip()
+    try:
+        raw = bytes.fromhex(hexstr)
+    except ValueError:
+        return "INVALID (not valid hex)"
+    if len(raw) != 32:
+        return f"INVALID (expected 32 bytes, got {len(raw)})"
+    return hashlib.sha256(raw).hexdigest()
+
+
 def ensure_qs(repo_root: str) -> str:
     qs = os.path.join(repo_root, "build/qs/ws/target/release/qs")
     if not os.path.exists(qs):
@@ -333,7 +361,16 @@ def accept_bundle(repo_root: str, qpr_path: str, pubkey_hex_file: str, last_gen_
                    build_flags: dict = None) -> dict:
     """The actual trusted 'publish' step: verify signature -> check/bump generation -> stage the
     ALREADY-SIGNED bytes verbatim (never re-signed, never re-packed) -> build a seL4 image from
-    them. No private key is read or used anywhere in this function."""
+    them. No private key is read or used anywhere in this function.
+
+    The build defaults to QEDOS_PRESS_PROD=1 with QEDOS_PRESS_PROD_PUBKEY set to this SAME
+    pubkey_hex_file -- the exact file this function just verified the signature against -- so the
+    seL4 image's own compile-time-embedded trust key and this host's host-side verification key
+    are, by construction, the identical bytes, never two independently-configured values that
+    could silently drift apart. See docs/QEDOS_PRESS_PROD_KEY.md. scripts/build-sel4.sh fails
+    closed (non-zero exit, no image produced) if pubkey_hex_file is malformed or equals the dev
+    key, which surfaces here as a RuntimeError from the failed build, same as any other build
+    failure."""
     header = verify_bundle_signature(repo_root, qpr_path, pubkey_hex_file)
     last = check_and_bump_generation(header, last_gen_file)
 
@@ -342,7 +379,9 @@ def accept_bundle(repo_root: str, qpr_path: str, pubkey_hex_file: str, last_gen_
 
     env = dict(os.environ)
     env["PATH"] = os.path.join(repo_root, "third_party/venv/bin") + os.pathsep + env.get("PATH", "")
-    for k, v in (build_flags or {"QEDOS_PRESS_COMPAT": "1"}).items():
+    default_flags = {"QEDOS_PRESS_COMPAT": "1", "QEDOS_PRESS_PROD": "1",
+                      "QEDOS_PRESS_PROD_PUBKEY": pubkey_hex_file}
+    for k, v in (build_flags if build_flags is not None else default_flags).items():
         env[k] = v
     env["QEDOS_PRESS_QPR"] = staged_qpr
     if cert:
@@ -408,6 +447,11 @@ INBOX_PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>QEDOS Pr
 public key ({pubkey_file}{pubkey_missing}) and checked against the last-accepted release
 generation before any build happens. <b>No private key is read or used by this host at any
 point.</b></p>
+<p>Public key fingerprint (sha256): <code>{fingerprint}</code><br>
+Accepting a bundle builds the seL4 image with <code>QEDOS_PRESS_PROD=1</code> against this exact
+file, so this fingerprint is also what gets embedded as the image's own compile-time trust key --
+compare it against the fingerprint <code>scripts/build-sel4.sh</code> printed for the same file if
+you want an independent cross-check rather than trusting "same file path" alone.</p>
 {message}
 {rows}
 </body></html>"""
@@ -557,10 +601,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if self.state.last_accept:
                 msg = f"<p style='color:green'>{html.escape(json.dumps(self.state.last_accept))}</p>"
             pubkey_missing = "" if os.path.exists(self.state.pubkey_file) else " -- MISSING, nothing can be accepted"
+            fp = pubkey_fingerprint(self.state.pubkey_file) or "(no key configured yet)"
             body = INBOX_PAGE.format(
                 inbox_dir=html.escape(self.state.inbox_dir),
                 pubkey_file=html.escape(self.state.pubkey_file),
                 pubkey_missing=pubkey_missing,
+                fingerprint=html.escape(fp),
                 message=msg,
                 rows="".join(rows) or "<p>(no .qpr files found)</p>",
             ).encode()
@@ -647,6 +693,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--set-password", action="store_true")
     ap.add_argument("--enroll-totp", action="store_true")
+    ap.add_argument("--show-pubkey-fingerprint", action="store_true",
+                     help="print the sha256 fingerprint of --pubkey-file and exit")
     ap.add_argument("--bind", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8900)
     ap.add_argument("--repo-root", default=REPO_ROOT_DEFAULT)
@@ -679,6 +727,12 @@ def main():
         return
     if args.enroll_totp:
         enroll_totp_interactive(totp_file, repo_root)
+        return
+    if args.show_pubkey_fingerprint:
+        fp = pubkey_fingerprint(pubkey_file)
+        if fp is None:
+            sys.exit(f"no public key file at {pubkey_file}")
+        print(f"{pubkey_file}: sha256={fp}")
         return
 
     if not os.path.exists(passwd_file):

@@ -15,12 +15,12 @@ fn panic(_info: &PanicInfo) -> ! {
     }
 }
 
-/// Pinned Ed25519 public key for QEDOS Press releases (dev key; see `config/keys/qedos-press-dev-*`
-/// and `docs/QEDOS_PRESS_CMS.md` — NOT production-grade, generated in this repo for development only).
-pub const PRESS_PUBLIC_KEY: [u8; 32] = [
-    0x06, 0x5f, 0x8b, 0xa3, 0x5f, 0x97, 0x48, 0x05, 0xa2, 0xa6, 0x9c, 0xba, 0xcc, 0x32, 0x27, 0x07,
-    0xe2, 0x74, 0xd6, 0xdd, 0x65, 0x5e, 0xc9, 0x49, 0xd9, 0xc0, 0xa6, 0x4c, 0xaa, 0xea, 0x69, 0x50,
-];
+/// Pinned Ed25519 public key for QEDOS Press releases. Compile-time constant, generated into
+/// `press_pubkey.rs` by `scripts/build-sel4.sh` on every build (dev key by default; a real
+/// production key only when `QEDOS_PRESS_PROD=1` + `QEDOS_PRESS_PROD_PUBKEY` is explicitly given
+/// -- see `docs/QEDOS_PRESS_PROD_KEY.md`). `include!` rather than a literal here so the exact same
+/// source file this doc describes is what every build actually compiles, dev or prod.
+include!("press_pubkey.rs");
 
 static mut MANIFEST: Option<Manifest<'static>> = None;
 

@@ -14,10 +14,9 @@ production key, never committed).
   ADMIN_004  a bundle signed with the WRONG key is rejected (Ed25519 verification failure)
   ADMIN_005  a validly-signed bundle is accepted once, and a lower-or-equal generation number is
              rejected afterward even though its signature is valid (rollback/replay protection)
-  ADMIN_006  the accepted bundle's image actually boots and serves the exact signed content
-             (using the project's own existing dev keypair so qedos_press_pd's compile-time-
-             pinned verification key actually matches -- see the "known gap" note in
-             docs/QEDOS_PRESS_ADMIN.md)
+  ADMIN_006  the accepted bundle's image actually boots and serves the exact signed content,
+             using a fresh TEST production keypair end to end (accept_bundle() builds with
+             QEDOS_PRESS_PROD=1 -- see docs/QEDOS_PRESS_PROD_KEY.md)
 """
 import http.client
 import os
@@ -233,21 +232,24 @@ def main():
         ok("ADMIN_005", "generation 10 accepted and built; generation 5 (validly signed, but <= last accepted) rejected as rollback, no rebuild")
 
         # ADMIN_006: the accepted image actually boots and serves the exact content.
-        # qedos_press_pd's verification key is a compile-time constant (sel4/rust_press's
-        # PRESS_PUBLIC_KEY, currently the committed dev key) independent of whatever pubkey this
-        # host-side tool is configured to check -- see the "known gap" in docs/QEDOS_PRESS_ADMIN.md.
-        # So THIS ONE check uses the project's own existing dev keypair (already committed,
-        # already used by every other QEDOS_PRESS build this session -- not a new key, not
-        # treated as production-safe) so the built image's embedded verifier actually matches.
+        # This USED TO need a workaround here (sign with the project's existing dev keypair, since
+        # qedos_press_pd's verification key was a hardcoded compile-time constant independent of
+        # whatever pubkey this host-side tool checked -- see docs/QEDOS_PRESS_ADMIN.md's "known
+        # gap", now closed by docs/QEDOS_PRESS_PROD_KEY.md). accept_bundle() now defaults to
+        # QEDOS_PRESS_PROD=1 with QEDOS_PRESS_PROD_PUBKEY set to this SAME pubkey_hex_file, which
+        # also means a dev-key-signed bundle would now be correctly REFUSED at the build step
+        # (scripts/build-sel4.sh explicitly rejects the dev key in production mode) -- so this test
+        # uses a fresh TEST production keypair instead, proving the real, fixed, end-to-end path.
         content_v2 = os.path.join(tmproot, "content-v2")
         os.makedirs(content_v2)
         boot_marker = "<!doctype html><html><body><h1>ADMIN BOOT TEST</h1></body></html>"
         with open(os.path.join(content_v2, "index.html"), "w") as f:
             f.write(boot_marker)
-        dev_seed = os.path.join(ROOT, "config/keys/qedos-press-dev-seed.hex")
-        dev_pub = os.path.join(ROOT, "config/keys/qedos-press-dev-pub.hex")
-        bundle_dev = os.path.join(inbox_dir, "dev-boot-test.qpr")
-        run_offline("sign", "--qs", qs, "--seed", dev_seed, "--release", "999888777",
+        prod_seed = os.path.join(tmproot, "admin-boot-prod-seed.hex")
+        prod_pub = os.path.join(tmproot, "admin-boot-prod-pub.hex")
+        run_offline("keygen", "--qs", qs, "--out-seed", prod_seed, "--out-pub", prod_pub)
+        bundle_dev = os.path.join(inbox_dir, "prod-boot-test.qpr")
+        run_offline("sign", "--qs", qs, "--seed", prod_seed, "--release", "999888777",
                     "--out", bundle_dev, content_v2)
 
         out_dir2 = os.path.join(tmproot, "out2")
@@ -256,7 +258,7 @@ def main():
             [sys.executable, os.path.join(ROOT, "tools/press-admin.py"),
              "--port", str(PORT + 1), "--repo-root", ROOT,
              "--passwd-file", passwd_file, "--secret-file", secret_file, "--totp-file", totp_file,
-             "--pubkey-file", dev_pub, "--last-gen-file", last_gen_file2,
+             "--pubkey-file", prod_pub, "--last-gen-file", last_gen_file2,
              "--inbox-dir", inbox_dir, "--site-dir", site_dir, "--out-dir", out_dir2],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
@@ -284,7 +286,7 @@ def main():
             csrf2 = extract_one_csrf(inbox2_body)
             conn = http.client.HTTPConnection(HOST, PORT + 1, timeout=60)
             conn.request("POST", "/inbox/accept", body=urllib.parse.urlencode(
-                {"filename": "dev-boot-test.qpr", "csrf": csrf2}).encode(),
+                {"filename": "prod-boot-test.qpr", "csrf": csrf2}).encode(),
                 headers={"Content-Type": "application/x-www-form-urlencoded",
                          "Cookie": f"session={cookie2}"})
             resp = conn.getresponse(); resp.read()
@@ -319,7 +321,7 @@ def main():
                 env=env, capture_output=True, text=True, timeout=20,
             ).stdout
             assert "HTTP/1.1 200 OK" in raw and boot_marker in raw, raw
-            ok("ADMIN_006", "the accepted, already-signed bundle's freshly-built image boots and serves the exact signed content over TLS1.3 (using the project's existing dev key so the compile-time-pinned verifier inside qedos_press_pd matches -- see known-gap note)")
+            ok("ADMIN_006", "the accepted, already-signed bundle's freshly-built image boots and serves the exact signed content over TLS1.3 -- a fresh test production key end to end (see docs/QEDOS_PRESS_PROD_KEY.md: accept_bundle() now builds with QEDOS_PRESS_PROD=1, closing the prior known gap)")
         finally:
             qemu.terminate()
             try:
