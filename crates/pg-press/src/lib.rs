@@ -96,6 +96,36 @@ fn u32_le(b: &[u8], off: usize) -> u32 {
     u32::from_le_bytes([b[off], b[off + 1], b[off + 2], b[off + 3]])
 }
 
+/// Pure, loop-free, total: the four length computations shared by every bundle (table/content/bundle
+/// extent), each overflow-checked. Extracted from `verify_and_load` so it can be Kani-proven in isolation
+/// over its *entire* input domain (every `usize` pair), independent of the route-table loop and the
+/// signature check. Returns `(table_len, content_start, content_end, bundle_len)`.
+fn compute_lengths(n_routes: usize, content_len: usize) -> Result<(usize, usize, usize, usize), PressError> {
+    let table_len = n_routes.checked_mul(ENTRY_LEN).ok_or(PressError::Malformed)?;
+    let content_start = HEADER_LEN.checked_add(table_len).ok_or(PressError::Malformed)?;
+    let content_end = content_start.checked_add(content_len).ok_or(PressError::Malformed)?;
+    let bundle_len = content_end.checked_add(SIG_LEN).ok_or(PressError::Malformed)?;
+    Ok((table_len, content_start, content_end, bundle_len))
+}
+
+/// Pure, loop-free, total: bounds-checks one already-sliced 136-byte route entry's scalar fields against
+/// `content_len`. Extracted from the per-entry loop in `verify_and_load` for the same reason as
+/// `compute_lengths` -- this is the actual function guarding against an out-of-bounds content read, proven
+/// over every `(path_len, ctype, offset, length, content_len)` combination, not a re-implementation of it.
+fn entry_bounds_ok(path_len: u8, ctype: u8, offset: u32, length: u32, content_len: usize) -> Result<(), PressError> {
+    if path_len as usize > MAX_PATH_LEN {
+        return Err(PressError::Malformed);
+    }
+    if ctype > CTYPE_OCTET {
+        return Err(PressError::Malformed);
+    }
+    let end = (offset as u64).checked_add(length as u64).ok_or(PressError::Malformed)?;
+    if end > content_len as u64 {
+        return Err(PressError::Malformed);
+    }
+    Ok(())
+}
+
 /// Verify the signed bundle's trailing 64-byte Ed25519 signature against `pubkey`, then parse and
 /// bounds-check every route entry. `blob` may be *larger* than the bundle itself (e.g. a fixed-size,
 /// zero-padded ELF section, as `script_bundles_section` also is) -- only the declared `content_len`
@@ -103,6 +133,19 @@ fn u32_le(b: &[u8], off: usize) -> u32 {
 /// signed, never served. Fails closed: any malformed entry (bad length, out-of-bounds offset, path
 /// too long) rejects the *whole* bundle, matching `pg_script_init`'s "all or nothing" convention.
 pub fn verify_and_load<'a>(blob: &'a [u8], pubkey: &[u8; 32]) -> Result<Manifest<'a>, PressError> {
+    verify_and_load_with(blob, pubkey, verify_ed25519)
+}
+
+/// Same as `verify_and_load`, but the Ed25519 check is a caller-supplied function instead of the real
+/// crypto -- the real crypto's own arithmetic is not practical for Kani to model (`pg_config` abstracts it
+/// away from its own Kani harnesses the same way, substituting a symbolic `bool`), so this indirection is
+/// what lets `verify_and_load`'s *surrounding* logic (length arithmetic, route-table bounds, fail-closed
+/// behavior) be exercised by Kani with the signature outcome as a free variable, without claiming anything
+/// about the signature algorithm itself.
+pub fn verify_and_load_with<'a, F>(blob: &'a [u8], pubkey: &[u8; 32], verify_fn: F) -> Result<Manifest<'a>, PressError>
+where
+    F: Fn(&[u8; 32], &[u8], &[u8; SIG_LEN]) -> bool,
+{
     if blob.len() < HEADER_LEN + SIG_LEN {
         return Err(PressError::TooShort);
     }
@@ -122,12 +165,7 @@ pub fn verify_and_load<'a>(blob: &'a [u8], pubkey: &[u8; 32]) -> Result<Manifest
     let content_len = u32_le(blob, 20) as usize;
 
     let table_start = HEADER_LEN;
-    let table_len = n_routes
-        .checked_mul(ENTRY_LEN)
-        .ok_or(PressError::Malformed)?;
-    let content_start = table_start.checked_add(table_len).ok_or(PressError::Malformed)?;
-    let content_end = content_start.checked_add(content_len).ok_or(PressError::Malformed)?;
-    let bundle_len = content_end.checked_add(SIG_LEN).ok_or(PressError::Malformed)?;
+    let (_table_len, content_start, _content_end, bundle_len) = compute_lengths(n_routes, content_len)?;
     if bundle_len > blob.len() {
         return Err(PressError::Malformed);
     }
@@ -137,7 +175,7 @@ pub fn verify_and_load<'a>(blob: &'a [u8], pubkey: &[u8; 32]) -> Result<Manifest
     let payload = &blob[..blob.len() - SIG_LEN];
     let mut sig = [0u8; SIG_LEN];
     sig.copy_from_slice(&blob[blob.len() - SIG_LEN..]);
-    if !verify_ed25519(pubkey, payload, &sig) {
+    if !verify_fn(pubkey, payload, &sig) {
         return Err(PressError::BadSignature);
     }
 
@@ -153,19 +191,10 @@ pub fn verify_and_load<'a>(blob: &'a [u8], pubkey: &[u8; 32]) -> Result<Manifest
     for i in 0..n_routes {
         let e = &blob[table_start + i * ENTRY_LEN..table_start + (i + 1) * ENTRY_LEN];
         let path_len = e[0];
-        if path_len as usize > MAX_PATH_LEN {
-            return Err(PressError::Malformed);
-        }
         let ctype = e[1];
-        if ctype > CTYPE_OCTET {
-            return Err(PressError::Malformed);
-        }
         let offset = u32_le(e, 4);
         let length = u32_le(e, 8);
-        let end = (offset as u64).checked_add(length as u64).ok_or(PressError::Malformed)?;
-        if end > content_len as u64 {
-            return Err(PressError::Malformed);
-        }
+        entry_bounds_ok(path_len, ctype, offset, length, content_len)?;
         let mut path = [0u8; MAX_PATH_LEN];
         path[..path_len as usize].copy_from_slice(&e[12..12 + path_len as usize]);
         let mut hash = [0u8; 64];
@@ -227,6 +256,9 @@ impl<'a> Manifest<'a> {
         }
     }
 }
+
+#[cfg(kani)]
+mod proofs;
 
 #[cfg(test)]
 mod tests {

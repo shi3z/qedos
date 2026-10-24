@@ -7,3 +7,6 @@ description = "QEDOS Press: signed static-content release bundle format, Ed25519
 
 [dependencies]
 pg-config = { path = "../pg-config" }
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(kani)'] }

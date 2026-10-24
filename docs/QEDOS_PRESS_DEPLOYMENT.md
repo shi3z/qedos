@@ -81,17 +81,53 @@ default image; no new image was built for this)
    rejected outright (`Invalid parameter 'user'`) — fail-closed (QEMU refused to start) rather than silently
    running unisolated, but corrected immediately rather than left as a latent trap.
 
-### Not yet verified (explicitly, not glossed over)
+### Guest-to-host outbound blocking under `restrict=on` — verified (A/B test, this session)
 
-* Guest-to-"internal LAN" and guest-to-"external internet" outbound blocking by `restrict=on` was not
-  independently exercised from inside the guest — QEDOS has no shell/userland to drive a test connection
-  from, and the only outbound behavior the running system has (`connector_pd` dialing a fixed backend
-  `IP:port`) was not exercised in this run (no backend was configured reachable from this ad hoc boot).
-  `restrict=on` is QEMU's own documented SLiRP mechanism and is widely relied upon, but this repo has not yet
-  produced a from-the-guest positive test of it, which is a thinner form of evidence than the host-side
-  socket-binding tests above, which were direct.
-* This used the pre-existing default image, not a QEDOS-Press-carrying image (phase 5 doesn't exist yet) —
-  the isolation properties shown here are about the *launcher*, independent of which PD set is inside.
+The item above ("not independently exercised from inside the guest") is now closed for the one real
+guest-initiated outbound path this system has: `connector_pd` dialing its fixed backend table, which in the
+existing default build targets `10.0.2.2:19001`/`19002` — SLiRP's magic alias for the host itself (used
+by `tests/test_sel4.py`'s SEL4_004, which proxies to `tests/backend.py` listening on `127.0.0.1:19001`).
+Per QEMU's own documentation, `restrict=on` specifically blocks the guest from contacting the host and from
+having any guest IP packet routed out through the host; it does not affect inbound `hostfwd` redirections.
+This makes the existing backend-dial mechanism a direct test of that exact property — no rebuild, no new
+probe, no production config touched.
+
+**Procedure** (A/B, same unmodified `build/sel4/loader.img`, same `tests/backend.py`, only the launcher
+differs):
+1. **Positive control** — booted via the existing `tools/run-echo.sh` with no `restrict` (the same
+   unrestricted invocation `tests/test_sel4.py` itself uses), sent the same `POST /api/chat` request used by
+   that suite's SEL4_004 over the loopback hostfwd. Result: `HTTP/1.1 200 OK`, body
+   `{"backend": "A", ..., "host": "10.0.2.2:19001", ...}` — confirms the probe genuinely reaches the host
+   backend when nothing blocks it.
+2. **Real test** — reset the backend's request log, booted the identical image via `tools/run-qedos-press.sh`
+   (`restrict=on,ipv6=off`), sent the identical request over its loopback hostfwd. Result: `HTTP/1.1 502 Bad
+   Gateway`, empty body, connection cleanly closed — a definite failure signal from `connector_pd`, not a
+   hang. Queried the backend's own `/__log__` endpoint directly afterward: **`[]` — zero connections ever
+   reached the host-side listener.** This is independent, host-side evidence (not just "the client saw an
+   error"): the backend process itself never saw the attempt.
+3. DHCP lease acquisition (SLiRP's internal service) still succeeded under `restrict=on` in the same run,
+   confirming the guest boots and runs normally — the 502 is specifically the blocked *outbound-to-host*
+   connection, not a general guest malfunction under restriction.
+
+**Scope of what this proves, stated precisely**: this confirms guest→host blocking (the `10.0.2.2` path),
+which is the same `restrict=on` mechanism QEMU's documentation states also covers guest→real-LAN and
+guest→internet (SLiRP enforces this as one feature, not three separately-configured ones) — but this test
+did not independently exercise a *second*, different destination (e.g. a real address on `192.168.2.0/24`)
+to confirm that sub-case directly, since the system's only guest-initiated egress today happens to resolve
+to the host alias. That remaining narrower gap is now the accurate statement of what's untested, replacing
+the broader "not exercised at all" from before this session.
+
+### Still not independently verified
+
+* The guest→real-LAN/guest→internet sub-cases of `restrict=on` specifically (as opposed to guest→host,
+  closed above) — would require `connector_pd`'s backend table to target a non-`10.0.2.2` address, which the
+  current build doesn't do; not pursued since it is the same single QEMU mechanism already shown to engage.
+* This used the pre-existing default image, not a QEDOS-Press-carrying image — the isolation properties
+  shown here (both this test and the earlier socket-binding ones) are about the *launcher*, independent of
+  which PD set is inside; Phase 5 (below) since added the actual `qedos_press_pd` and re-ran its own full
+  test suite, but did not re-run this specific egress A/B test against that image (not expected to differ,
+  since `connector_pd`/the backend table are unchanged by Phase 5 — but stated plainly as not re-run, not
+  assumed).
 
 ## Phase 5 — the QEDOS Press PD itself
 
