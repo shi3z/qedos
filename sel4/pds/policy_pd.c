@@ -25,6 +25,12 @@ extern uint8_t pg_rust_is_script_route(uint8_t method_u8, const uint8_t *target_
 #define CH_POLICY_PRESS 4
 extern uint8_t pg_rust_is_press_route(const uint8_t *target_ptr, size_t target_len);
 #endif
+#ifdef QEDOS_PRESS_PQ
+#define CH_POLICY_PQ 5
+#define PQ_FETCH_ROUTE "/press/pq-fetch"
+#define PQ_FETCH_ROUTE_LEN 15u /* sizeof(PQ_FETCH_ROUTE) - 1 */
+_Static_assert(sizeof(PQ_FETCH_ROUTE) - 1 == PQ_FETCH_ROUTE_LEN, "PQ_FETCH_ROUTE_LEN out of sync");
+#endif
 
 extern int32_t pg_rust_policy_init(
     const uint8_t *blob_ptr,
@@ -59,6 +65,9 @@ static pg_shm_policy_script_t *shm_policy_script = (pg_shm_policy_script_t *)VAD
 #endif
 #ifdef QEDOS_PRESS
 static pg_shm_policy_press_t *shm_policy_press = (pg_shm_policy_press_t *)VADDR_SHM_POLICY_PRESS;
+#endif
+#ifdef QEDOS_PRESS_PQ
+static pg_shm_policy_pq_t *shm_policy_pq = (pg_shm_policy_pq_t *)VADDR_SHM_POLICY_PQ;
 #endif
 
 void init(void)
@@ -168,6 +177,76 @@ void notified(microkit_channel ch)
         microkit_notify(CH_POLICY_HTTP);
         return;
     }
+
+#ifdef QEDOS_PRESS_PQ
+    /* QEDOS Press PQ-wrap dispatch: an exact POST /press/pq-fetch goes to press_pq_pd instead of
+     * the general /press prefix handler below -- checked first so this one route never falls
+     * through to the plain qedos_press_pd dispatch. The POST body carries [path_len:u16
+     * LE][path bytes][ML-KEM-768 capsule, PG_PQ_CAPSULE_LEN bytes] -- see
+     * docs/QEDOS_PRESS_PQ_WRAP.md for why this framing was chosen over a query parameter. */
+    if (shm_policy_conn->config_verified &&
+        shm_http_policy->method == 2 /* POST */ &&
+        shm_http_policy->target_len == PQ_FETCH_ROUTE_LEN) {
+        uint8_t is_pq_route = 1;
+        for (uint16_t i = 0; i < PQ_FETCH_ROUTE_LEN; i++) {
+            if (shm_http_policy->target[i] != (uint8_t)PQ_FETCH_ROUTE[i]) { is_pq_route = 0; break; }
+        }
+        if (is_pq_route) {
+            if (shm_policy_pq->req_seq != shm_policy_pq->ack_seq) {
+                /* press_pq_pd hasn't yet consumed the previous request on this single, deliberately
+                 * shared record -- shed, same accepted pattern as shm_policy_conn/shm_policy_script. */
+                shm_http_policy->decision = PG_DECISION_REJECT;
+                shm_http_policy->backend_id = 0;
+                shm_http_policy->reject_status = 503;
+                PG_FENCE();
+                shm_http_policy->ack_seq = rseq;
+                PG_FENCE();
+                microkit_notify(CH_POLICY_HTTP);
+                return;
+            }
+            uint32_t blen = shm_http_policy->body_len;
+            if (blen > PG_MAX_REQ_RAW) { blen = PG_MAX_REQ_RAW; }
+            uint16_t path_len = 0;
+            if (blen >= 2) {
+                path_len = (uint16_t)(shm_http_policy->body[0] | (shm_http_policy->body[1] << 8));
+            }
+            uint32_t needed = 2u + (uint32_t)path_len + PG_PQ_CAPSULE_LEN;
+            if (path_len == 0 || path_len > PG_MAX_TARGET || blen < needed) {
+                /* Malformed framing -- reject before ever touching press_pq_pd. */
+                shm_http_policy->decision = PG_DECISION_REJECT;
+                shm_http_policy->backend_id = 0;
+                shm_http_policy->reject_status = 400;
+                PG_FENCE();
+                shm_http_policy->ack_seq = rseq;
+                PG_FENCE();
+                microkit_notify(CH_POLICY_HTTP);
+                return;
+            }
+            /* Whole-buffer overwrite: bytes of an earlier client's request never remain readable by
+             * press_pq_pd beyond the current request's length. */
+            for (uint32_t i = 0; i < PG_MAX_TARGET; i++) {
+                shm_policy_pq->target[i] = (i < path_len) ? shm_http_policy->body[2u + i] : 0;
+            }
+            for (uint32_t i = 0; i < PG_PQ_CAPSULE_LEN; i++) {
+                shm_policy_pq->capsule[i] = shm_http_policy->body[2u + path_len + i];
+            }
+            shm_policy_pq->target_len = path_len;
+            shm_policy_pq->slot = shm_http_policy->slot;
+            shm_policy_pq->keep_alive = shm_http_policy->keep_alive;
+            shm_http_policy->decision = PG_DECISION_PRESS_PQ;
+            shm_http_policy->backend_id = 0;
+            shm_http_policy->reject_status = 0;
+            PG_FENCE();
+            shm_http_policy->ack_seq = rseq;
+            PG_FENCE();
+            shm_policy_pq->req_seq = shm_policy_pq->req_seq + 1;
+            PG_FENCE();
+            microkit_notify(CH_POLICY_PQ);
+            microkit_notify(CH_POLICY_HTTP);   /* http_pd records the in-flight pq request from this decision */
+            return;
+        }
+    }
+#endif
 
     /* QEDOS Press dispatch: any method on a /press path goes to qedos_press_pd, which answers 200/404/405
      * itself (GET/HEAD against a known path => 200; known path, other method => 405; unknown => 404).

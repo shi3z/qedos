@@ -30,6 +30,13 @@ extern size_t pg_rust_format_press_response(uint16_t status, uint8_t ctype, uint
                                             const uint8_t *body_ptr, size_t body_len, uint32_t content_len,
                                             uint8_t *out_ptr, size_t out_cap);
 #endif
+#ifdef QEDOS_PRESS_PQ
+#define CH_HTTP_PQ 7
+extern size_t pg_rust_format_pq_response(uint16_t app_status, uint8_t keep_alive,
+                                         const uint8_t *nonce_ptr,
+                                         const uint8_t *ciphertext_ptr, size_t ciphertext_len,
+                                         uint8_t *out_ptr, size_t out_cap);
+#endif
 
 extern int32_t pg_rust_parse_http_request(
     const uint8_t *buf_ptr,
@@ -128,6 +135,12 @@ static pg_shm_press_http_t *shm_press_http = (pg_shm_press_http_t *)VADDR_SHM_PR
  * stream. */
 static uint32_t last_press_resp[PG_MAX_CONNS];
 static pg_ipc_inflight_t press_inflight[PG_MAX_CONNS];
+#endif
+#ifdef QEDOS_PRESS_PQ
+static pg_shm_pq_http_t *shm_pq_http = (pg_shm_pq_http_t *)VADDR_SHM_PQ_HTTP;
+static uint32_t last_pq_resp = 0;
+/* Deliberately single-in-flight, same as fwd_inflight/script_inflight (see pg_shm.h section 10). */
+static pg_ipc_inflight_t pq_inflight;
 #endif
 
 /* Connection generations of all slots, for the pg-ipc correlation checks. */
@@ -330,6 +343,13 @@ static void check_policy_completion(void)
         (void)pg_ipc_inflight_record(&press_inflight[s], s, ids);
     }
 #endif
+#ifdef QEDOS_PRESS_PQ
+    else if (dec == PG_DECISION_PRESS_PQ) {
+        uint32_t ids[PG_MAX_CONNS];
+        conn_ids_snapshot(ids);
+        (void)pg_ipc_inflight_record(&pq_inflight, s, ids);
+    }
+#endif
     else if (dec == PG_DECISION_FORWARD) {
         uint32_t ids[PG_MAX_CONNS];
         conn_ids_snapshot(ids);
@@ -514,6 +534,63 @@ static void check_press_response(void)
 }
 #endif
 
+#ifdef QEDOS_PRESS_PQ
+static uint8_t pq_http_buf[PG_PQ_BODY_MAX + 1024u];
+static uint8_t pq_ciphertext_copy[PG_PQ_BODY_MAX + 16u];
+
+static void check_pq_response(void)
+{
+    /* The decision notification from policy_pd may not have been processed yet on another core. */
+    check_policy_completion();
+
+    uint32_t rseq = shm_pq_http->resp_seq;
+    if (rseq == last_pq_resp) {
+        return;
+    }
+    last_pq_resp = rseq;
+
+    /* Snapshot every press_pq_pd-controlled scalar exactly once (no double fetch). */
+    uint8_t  s           = shm_pq_http->slot;
+    uint8_t  ka          = shm_pq_http->keep_alive;
+    uint16_t status      = shm_pq_http->status;
+    uint32_t ct_len       = shm_pq_http->ciphertext_len;
+    uint8_t  nonce[12];
+    for (int i = 0; i < 12; i++) { nonce[i] = shm_pq_http->nonce[i]; }
+    PG_FENCE();
+    shm_pq_http->resp_ack = rseq;
+    PG_FENCE();
+
+    if (s >= PG_MAX_CONNS) {
+        return; /* never index slot_state[] with a value read from shared memory */
+    }
+
+    /* Accept only the response to the single request actually in flight, once. */
+    uint32_t ids[PG_MAX_CONNS];
+    conn_ids_snapshot(ids);
+    if (!pg_ipc_inflight_accept(&pq_inflight, s, ids)) {
+        return;
+    }
+
+    size_t rlen = 0;
+    if (status >= 100 && status <= 599 && ct_len <= sizeof(pq_ciphertext_copy)) {
+        for (uint32_t i = 0; i < ct_len; i++) { pq_ciphertext_copy[i] = shm_pq_http->ciphertext[i]; }
+        rlen = pg_rust_format_pq_response(status, ka, nonce, pq_ciphertext_copy, ct_len,
+                                          pq_http_buf, sizeof(pq_http_buf));
+    }
+    slot_state[s].awaiting_backend = 0;
+    if (rlen == 0) {
+        uint8_t resp[256];
+        rlen = pg_rust_format_local_response(502, 0, 0, 0, resp, sizeof(resp));
+        send_resp_to_tls(s, resp, rlen, 1);
+    } else {
+        send_resp_to_tls(s, pq_http_buf, rlen, ka ? 0 : 1);
+    }
+    if (ka) {
+        process_slot_requests(s);
+    }
+}
+#endif
+
 void init(void)
 {
     microkit_dbg_puts("HTTP_PD: initialized (no_std Rust pg-http, forbid(unsafe_code))\n");
@@ -534,6 +611,10 @@ void notified(microkit_channel ch)
 #ifdef QEDOS_PRESS
     } else if (ch == CH_HTTP_PRESS) {
         check_press_response();
+#endif
+#ifdef QEDOS_PRESS_PQ
+    } else if (ch == CH_HTTP_PQ) {
+        check_pq_response();
 #endif
     } else if (ch == CH_HTTP_TLS) {
         for (uint8_t s = 0; s < PG_MAX_CONNS; s++) {

@@ -19,6 +19,11 @@
  *   qedos_press_pd has no other shared memory, no timer/IRQ/ioport/TCB caps, and exactly two
  *   channels (policy_pd, http_pd) -- its signed static-content bundle is its own read-only `.rodata`
  *   (see sel4/pds/qedos_press_pd.c), not a cross-PD shared region.
+ *   QEDOS Press PQ wrap (only present in images built with QEDOS_PRESS_PQ=1):
+ *   - VADDR_SHM_POLICY_PQ  (0x3E000000): mapped ONLY in policy_pd and press_pq_pd
+ *   - VADDR_SHM_PQ_HTTP    (0x3F000000): mapped ONLY in press_pq_pd and http_pd
+ *   - VADDR_PQ_KEYSTORE    (0x41000000): mapped ONLY in press_pq_pd (perms="r") -- the static
+ *     ML-KEM-768 decapsulation private key, same isolation discipline as VADDR_TLS_KEYSTORE.
  */
 #ifndef PROOFGATE_SEL4_PG_SHM_H
 #define PROOFGATE_SEL4_PG_SHM_H
@@ -39,6 +44,9 @@
 #define VADDR_SHM_SUP_HTTP      0x3B000000ULL   /* supervisor_pd (rw) -> http_pd (r): abort_seq */
 #define VADDR_SHM_POLICY_PRESS  0x3C000000ULL
 #define VADDR_SHM_PRESS_HTTP    0x3D000000ULL
+#define VADDR_SHM_POLICY_PQ     0x3E000000ULL
+#define VADDR_SHM_PQ_HTTP       0x3F000000ULL
+#define VADDR_PQ_KEYSTORE       0x41000000ULL
 
 #define PG_MAX_CONNS    4u
 _Static_assert(PG_MAX_CONNS == 4u, "must equal pg_ipc::MAX_CONNS (crates/pg-ipc/src/lib.rs)");
@@ -142,6 +150,7 @@ typedef struct {
 #define PG_DECISION_FORWARD 2u
 #define PG_DECISION_SCRIPT  3u /* QED Script dispatch (QEDOS_SCRIPT builds only) */
 #define PG_DECISION_PRESS   4u /* QEDOS Press dispatch (QEDOS_PRESS builds only) */
+#define PG_DECISION_PRESS_PQ 5u /* QEDOS Press PQ-wrap dispatch (QEDOS_PRESS_PQ builds only) */
 
 typedef struct {
     volatile uint32_t req_seq;       /* Incremented by http_pd when a request is ready */
@@ -326,5 +335,49 @@ typedef struct {
 } pg_shm_press_http_t;
 /* Keep this in sync with shm_press_http's MemoryRegion size in sel4/meta_proofgate.py (0x21000). */
 _Static_assert(sizeof(pg_shm_press_http_t) <= 0x21000u, "shm_press_http region too small");
+
+/* =========================================================================
+ * 10. QEDOS Press PQ envelope (QEDOS_PRESS_PQ=1 images only)
+ *     shm_policy_pq: approved POST /press/pq-fetch request (policy_pd -> press_pq_pd)
+ *     shm_pq_http:   AEAD-encrypted response             (press_pq_pd -> http_pd)
+ *     press_pq_pd has NO other shared memory, holds its OWN secret (pq_keystore: the static
+ *     ML-KEM-768 decapsulation private key, read-only, mapped in no other PD -- same isolation
+ *     discipline as tls_keystore/LAW_008), and exactly two channels. See
+ *     docs/QEDOS_PRESS_PQ_WRAP.md.
+ *
+ *     Deliberately single-in-flight (one shared record, not a per-slot array like
+ *     shm_policy_press/shm_press_http): a second concurrent POST /press/pq-fetch is shed with 503
+ *     while the first is in flight. Same accepted pattern as shm_policy_conn (connector_pd) and
+ *     shm_policy_script (script_pd) -- scope kept narrow for this new, lower-traffic path rather
+ *     than repeating the per-slot-array treatment shm_policy_press/shm_press_http needed once
+ *     their traffic justified it.
+ * ========================================================================= */
+#define PG_PQ_CAPSULE_LEN 1088u  /* ML-KEM-768 ciphertext (ek-independent, fixed by FIPS 203) */
+#define PG_PQ_BODY_MAX    32768u /* same plaintext cap as PG_PRESS_BODY_MAX */
+
+typedef struct {
+    volatile uint32_t req_seq;   /* policy_pd increments when a pq-fetch request is ready */
+    volatile uint32_t ack_seq;   /* press_pq_pd sets to req_seq when consumed */
+    volatile uint8_t  slot;      /* which http_pd connection slot to answer (0..PG_MAX_CONNS-1) */
+    volatile uint8_t  keep_alive;
+    uint16_t          _pad0;
+    volatile uint16_t target_len; /* requested content path, e.g. "/press/index.html" */
+    uint16_t          _pad1;
+    uint8_t           target[PG_MAX_TARGET];
+    uint8_t           capsule[PG_PQ_CAPSULE_LEN]; /* client's ML-KEM-768 encapsulation ciphertext */
+} pg_shm_policy_pq_t;
+_Static_assert(sizeof(pg_shm_policy_pq_t) <= 0x10000u, "shm_policy_pq region too small");
+
+typedef struct {
+    volatile uint32_t resp_seq;  /* press_pq_pd increments when a result is ready */
+    volatile uint32_t resp_ack;  /* http_pd sets to resp_seq once copied out */
+    volatile uint8_t  slot;
+    volatile uint8_t  keep_alive;
+    volatile uint16_t status;    /* HTTP status to send (200, 404, 400, 503, ...) */
+    uint8_t           nonce[12]; /* fresh AES-256-GCM nonce, one per response */
+    volatile uint32_t ciphertext_len; /* plaintext_len + 16-byte GCM tag */
+    uint8_t           ciphertext[PG_PQ_BODY_MAX + 16u];
+} pg_shm_pq_http_t;
+_Static_assert(sizeof(pg_shm_pq_http_t) <= 0x10000u, "shm_pq_http region too small");
 
 #endif /* PROOFGATE_SEL4_PG_SHM_H */

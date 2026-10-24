@@ -3,9 +3,10 @@
  "secrets": {
   "regions": [
    "tls_keystore",
-   "shm_signed_config"
+   "shm_signed_config",
+   "pq_keystore"
   ],
-  "note": "tls_keystore: TLS private key + certificate (tls_pd only, read-only). shm_signed_config: Ed25519-verified routing/backend config (policy_pd only, read-only)."
+  "note": "tls_keystore: TLS private key + certificate (tls_pd only, read-only). shm_signed_config: Ed25519-verified routing/backend config (policy_pd only, read-only). pq_keystore: ML-KEM-768 decapsulation private key for QEDOS Press's app-layer PQ envelope (press_pq_pd only, read-only; QEDOS_PRESS_PQ=1 images -- see docs/QEDOS_PRESS_PQ_WRAP.md)."
  },
  "pds": {
   "connector_pd": {
@@ -344,6 +345,27 @@
     "monitor"
    ],
    "optional": true
+  },
+  "press_pq_pd": {
+   "signal": [
+    "http_pd",
+    "policy_pd"
+   ],
+   "send": [
+    "monitor"
+   ],
+   "call": [],
+   "irq": [],
+   "ioport": [],
+   "maps": {
+    "shm_policy_pq": "rw",
+    "shm_pq_http": "rw",
+    "pq_keystore": "r"
+   },
+   "other_caps": [],
+   "priority": 92,
+   "rationale": "Holds the ML-KEM-768 decapsulation private key (pq_keystore, read-only, mapped in no other PD -- same isolation discipline as tls_pd/tls_keystore). Decapsulates a client-supplied KEM ciphertext, derives an AES-256-GCM key via HKDF, and AEAD-encrypts the same signed static content qedos_press_pd serves in the clear, so an app-layer PQ guarantee survives even over a classical (e.g. tls_compat_pd) outer TLS channel. Two shared regions and two notification channels. Not subjected to the C1-C8 confinement checks (no interface_pds declared) for the same reason tls_pd isn't: it is itself a secret holder, not a subject being confined away from one -- its isolation is proven by B1 (it is the only PD whose maps include pq_keystore), the same way tls_keystore's is.",
+   "optional": true
   }
  },
  "features": {
@@ -394,6 +416,27 @@
      "signal": [
       "supervisor_pd"
      ]
+    }
+   }
+  },
+  "press_pq": {
+   "requires_pd": "press_pq_pd",
+   "add": {
+    "http_pd": {
+     "signal": [
+      "press_pq_pd"
+     ],
+     "maps": {
+      "shm_pq_http": "rw"
+     }
+    },
+    "policy_pd": {
+     "signal": [
+      "press_pq_pd"
+     ],
+     "maps": {
+      "shm_policy_pq": "rw"
+     }
     }
    }
   }

@@ -149,6 +149,20 @@ def main() -> None:
             "qedos_press_pd", "qedos_press_pd.elf", priority=92, budget=20000, stack_size=0x40000, cpu=0
         )
 
+    # QEDOS Press PQ wrap (opt-in: QEDOS_PRESS_PQ=1, implies QEDOS_PRESS=1 -- see
+    # scripts/build-sel4.sh). A separate PD, press_pq_pd, holds its own ML-KEM-768 decapsulation
+    # private key (pq_keystore, same isolation discipline as tls_keystore/LAW_008) and answers
+    # POST /press/pq-fetch: an application-layer PQ-encrypted envelope around the same signed
+    # static content qedos_press_pd serves in the clear, so a client whose outer TLS is classical
+    # (e.g. tls_compat_pd) still gets PQ-protected confidentiality for this content against a
+    # future break of today's classical ECDHE. See docs/QEDOS_PRESS_PQ_WRAP.md.
+    press_pq_on = os.environ.get("QEDOS_PRESS_PQ") == "1"
+    press_pq_pd = None
+    if press_pq_on:
+        press_pq_pd = ProtectionDomain(
+            "press_pq_pd", "press_pq_pd.elf", priority=92, budget=20000, stack_size=0x40000, cpu=0
+        )
+
     serial_system.add_client(tcp_pd)
     timer_system.add_client(tcp_pd)
     if script_on:
@@ -192,6 +206,14 @@ def main() -> None:
         shm_press_http = MemoryRegion(sdf, "shm_press_http", 0x21000)
         sdf.add_mr(shm_policy_press)
         sdf.add_mr(shm_press_http)
+
+    if press_pq_on:
+        shm_policy_pq = MemoryRegion(sdf, "shm_policy_pq", 0x10000)
+        shm_pq_http = MemoryRegion(sdf, "shm_pq_http", 0x10000)
+        pq_keystore = MemoryRegion(sdf, "pq_keystore", 0x2000)
+        sdf.add_mr(shm_policy_pq)
+        sdf.add_mr(shm_pq_http)
+        sdf.add_mr(pq_keystore)
 
     for mr in [
         shm_tcp_tls,
@@ -256,6 +278,15 @@ def main() -> None:
         press_pd.add_map(Map(shm_press_http, 0x3D00_0000, "rw"))
         http_pd.add_map(Map(shm_press_http, 0x3D00_0000, "rw"))
 
+    if press_pq_on:
+        # press_pq_pd maps ONLY these three regions; two shared with policy_pd/http_pd plus its
+        # own read-only secret (pq_keystore). No net/timer/IRQ, no TCB/untyped caps.
+        policy_pd.add_map(Map(shm_policy_pq, 0x3E00_0000, "rw"))
+        press_pq_pd.add_map(Map(shm_policy_pq, 0x3E00_0000, "rw"))
+        press_pq_pd.add_map(Map(shm_pq_http, 0x3F00_0000, "rw"))
+        http_pd.add_map(Map(shm_pq_http, 0x3F00_0000, "rw"))
+        press_pq_pd.add_map(Map(pq_keystore, 0x4100_0000, "r"))
+
     # 4. qedos IPC Channels
     sdf.add_channel(Channel(tcp_pd, tls_pd, a_id=10, b_id=1))
     sdf.add_channel(Channel(tls_pd, http_pd, a_id=2, b_id=1))
@@ -273,6 +304,10 @@ def main() -> None:
         sdf.add_channel(Channel(policy_pd, press_pd, a_id=4, b_id=1))
         sdf.add_channel(Channel(press_pd, http_pd, a_id=2, b_id=6))
 
+    if press_pq_on:
+        sdf.add_channel(Channel(policy_pd, press_pq_pd, a_id=5, b_id=1))
+        sdf.add_channel(Channel(press_pq_pd, http_pd, a_id=2, b_id=7))
+
     for pd in [
         serial_driver,
         serial_virt_tx,
@@ -286,7 +321,7 @@ def main() -> None:
         http_pd,
         policy_pd,
         connector_pd,
-    ] + ([supervisor_pd] if script_on else []) + ([press_pd] if press_on else []):   # script_pd is nested inside supervisor_pd (child PD)
+    ] + ([supervisor_pd] if script_on else []) + ([press_pd] if press_on else []) + ([press_pq_pd] if press_pq_on else []):   # script_pd is nested inside supervisor_pd (child PD)
         sdf.add_pd(pd)
 
     out_path = os.path.join(args.output, args.sdf)

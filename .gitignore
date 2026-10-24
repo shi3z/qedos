@@ -7,6 +7,11 @@
 /tools/qemu/
 /third_party/*
 !/third_party/openssl-3.6.1.tar.gz.sha256
+# Vendored noble-post-quantum (ML-KEM-768 client library + LICENSEs + original npm tarballs for
+# provenance) -- small, security-sensitive, and referenced from docs/QEDOS_PRESS_PQ_WRAP.md, so
+# unlike the rest of third_party/ (large downloaded toolchains) this one IS committed.
+!/third_party/noble-post-quantum/
+!/third_party/noble-post-quantum/**
 
 # Build artifacts (keep formal verification & benchmark evidence)
 /build/*

@@ -17,6 +17,7 @@ case "$ARCH" in
     CLANG_TARGET="-target x86_64-none-elf"
     ARCH_CFLAGS="-mno-red-zone"
     OPENSSL_SEL4="$R/third_party/openssl-sel4"
+    OPENSSL_HOST_BIN="$R/third_party/openssl-install/bin/openssl"  # host-side (ML-KEM-768 keygen etc.)
     ECHO_DIR="$R/build/echo"
     OUT="$R/build/sel4"
     [ "${QEDOS_SCRIPT:-0}" = 1 ] && OUT="$R/build/sel4-script"   # never clobber the baseline image
@@ -28,6 +29,13 @@ case "$ARCH" in
     if [ "${QEDOS_PRESS_COMPAT:-0}" = 1 ]; then
       export QEDOS_PRESS=1   # must be exported: sel4/meta_proofgate.py reads it as a subprocess
       OUT="$R/build/sel4-press-compat"
+    fi
+    # QEDOS_PRESS_PQ=1 implies QEDOS_PRESS=1 and adds the separate press_pq_pd (app-layer
+    # ML-KEM-768 envelope for POST /press/pq-fetch -- see docs/QEDOS_PRESS_PQ_WRAP.md). Own output
+    # directory, never combined with QEDOS_PRESS_COMPAT=1 in this phase.
+    if [ "${QEDOS_PRESS_PQ:-0}" = 1 ]; then
+      export QEDOS_PRESS=1
+      OUT="$R/build/sel4-press-pq"
     fi
     [ -n "${QEDOS_OUT:-}" ] && OUT="$QEDOS_OUT"                  # explicit override (e.g. rebuild-from-source checks)
     ;;
@@ -115,6 +123,7 @@ done
 FEATURE_DEFS=""
 [ "${QEDOS_SCRIPT:-0}" = 1 ] && FEATURE_DEFS="$FEATURE_DEFS -DQEDOS_SCRIPT=1"
 [ "${QEDOS_PRESS:-0}" = 1 ] && FEATURE_DEFS="$FEATURE_DEFS -DQEDOS_PRESS=1"
+[ "${QEDOS_PRESS_PQ:-0}" = 1 ] && FEATURE_DEFS="$FEATURE_DEFS -DQEDOS_PRESS_PQ=1"
 if [ -n "$FEATURE_DEFS" ]; then
   for pd in http_pd policy_pd; do
     clang $COMMON_CFLAGS $FEATURE_DEFS -Isel4/libc_shim/include -c "$R/sel4/pds/${pd}.c" -o "$OUT/${pd}.o"
@@ -155,6 +164,17 @@ if [ "${QEDOS_PRESS:-0}" = 1 ]; then
     -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/qedos_press_pd.elf"
 fi
 
+# 7e. QEDOS Press PQ-wrap PD (opt-in: QEDOS_PRESS_PQ=1). Reuses the same pg-press Rust staticlib
+# (manifest verify/lookup, not duplicated) plus the freestanding OpenSSL build (ML-KEM-768
+# decapsulate, HKDF, AES-256-GCM) -- same link pattern as tls_pd. See docs/QEDOS_PRESS_PQ_WRAP.md.
+if [ "${QEDOS_PRESS_PQ:-0}" = 1 ]; then
+  clang $COMMON_CFLAGS -DQEDOS_PRESS_PQ=1 -I"$R/sel4/libc_shim" -Isel4/libc_shim/include -I"$OPENSSL_SEL4/include" \
+    -c "$R/sel4/pds/press_pq_pd.c" -o "$OUT/press_pq_pd.o"
+  ld.lld -L"$BOARD_DIR/lib" --start-group \
+    "$OUT/press_pq_pd.o" "$OUT/libc_shim.o" "$RUST_PRESS_A" "$OPENSSL_SEL4/lib/libssl.a" "$OPENSSL_SEL4/lib/libcrypto.a" \
+    -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/press_pq_pd.elf"
+fi
+
 # 8. Generate `proofgate.system` and sDDF `.data` sections, then patch ELFs
 DTB_ARG=""
 [ "$ARCH" = aarch64 ] && DTB_ARG="--dtb $ECHO_DIR/$BOARD.dtb"
@@ -193,27 +213,81 @@ if [ "${QEDOS_SCRIPT:-0}" = 1 ]; then
   llvm-objcopy --update-section .script_bundles="$OUT/script_bundles.data" "$OUT/script_pd.elf"
 fi
 
+# Inject the ML-KEM-768 decapsulation private key material ONLY (QEDOS_PRESS_PQ=1). Must run
+# BEFORE the release-bundle packing step below: it produces examples/press-site-pq/pqkey.bin, one
+# of the files that step packs. config/dev/pq-priv.pem is a dev-only key, same committed-dev-key
+# precedent as config/dev/key.pem; a real deployment would use a QEDOS_PQ_PRIVATE_KEY-style
+# override (not added in this phase -- see docs/QEDOS_PRESS_PQ_WRAP.md).
+if [ "${QEDOS_PRESS_PQ:-0}" = 1 ]; then
+  if [ ! -f "$R/config/dev/pq-priv.pem" ]; then
+    mkdir -p "$R/config/dev"
+    "$OPENSSL_HOST_BIN" genpkey -algorithm ML-KEM-768 -out "$R/config/dev/pq-priv.pem"
+  fi
+  if [ ! -f "$R/examples/press-site-pq/pqkey.bin" ]; then
+    PQ_DUMP_BIN="$R/build/host-tools/pq-dump-pubkey"
+    if [ ! -x "$PQ_DUMP_BIN" ]; then
+      mkdir -p "$R/build/host-tools"
+      cc "$R/tools/pq-dump-pubkey.c" \
+        -I"$R/third_party/openssl-install/include" \
+        -L"$R/third_party/openssl-install/lib64" -L"$R/third_party/openssl-install/lib" -lcrypto \
+        -Wl,-rpath,"$R/third_party/openssl-install/lib64" \
+        -o "$PQ_DUMP_BIN"
+    fi
+    mkdir -p "$R/examples/press-site-pq"
+    "$PQ_DUMP_BIN" "$R/config/dev/pq-priv.pem" > "$R/examples/press-site-pq/pqkey.bin"
+  fi
+fi
+
 # Inject the signed QPR1 release bundle into qedos_press_pd.elf `.press_bundle` ONLY (QEDOS_PRESS=1).
 # The bundle is Ed25519-verified at boot inside qedos_press_pd against the pinned dev press key
 # (config/keys/qedos-press-dev-pub.hex -- NOT production-grade; see docs/QEDOS_PRESS_CMS.md).
+# QEDOS_PRESS_PQ=1 images pack a SEPARATE, richer site (examples/press-site-pq/ -- adds pqkey.bin,
+# pq-client.js, vendor/ml-kem768.bundle.js) into its own cached .qpr, and inject that same bundle
+# into press_pq_pd.elf too (it reuses qedos_press_pd's manifest verify/lookup code and needs the
+# same signed content to answer pg_press_handle() lookups for pq-fetch). Every QEDOS_PRESS=1 image
+# WITHOUT QEDOS_PRESS_PQ=1 keeps packing the original, smaller examples/press-site/ unchanged --
+# this keeps that image's route count (and every existing test's assumptions about it) unaffected
+# by this feature.
 if [ "${QEDOS_PRESS:-0}" = 1 ]; then
-  if [ ! -f "$R/config/dev/press-release.qpr" ]; then
+  PRESS_SITE_DIR="$R/examples/press-site"
+  PRESS_QPR="$R/config/dev/press-release.qpr"
+  if [ "${QEDOS_PRESS_PQ:-0}" = 1 ]; then
+    PRESS_SITE_DIR="$R/examples/press-site-pq"
+    PRESS_QPR="$R/config/dev/press-pq-release.qpr"
+  fi
+  if [ ! -f "$PRESS_QPR" ]; then
     QS="$R/build/qs/ws/target/release/qs"
     [ -x "$QS" ] || "$R/scripts/qs-ws.sh" build --release -p pg-script-cli
     mkdir -p "$R/config/dev"
     python3 "$R/tools/press-release.py" \
       --site-id 1 --release 1 \
       --qs "$QS" --seed "$R/config/keys/qedos-press-dev-seed.hex" \
-      --out "$R/config/dev/press-release.qpr" \
-      "$R/examples/press-site"
+      --out "$PRESS_QPR" \
+      "$PRESS_SITE_DIR"
   fi
-  python3 - "$R/config/dev/press-release.qpr" "$OUT/press_bundle.data" <<'PY'
+  python3 - "$PRESS_QPR" "$OUT/press_bundle.data" <<'PY'
 import sys
 d = open(sys.argv[1], "rb").read()
 assert len(d) <= 262144, "release bundle exceeds qedos_press_pd .press_bundle (256 KiB)"
 open(sys.argv[2], "wb").write(d.ljust(262144, b"\0"))
 PY
   llvm-objcopy --update-section .press_bundle="$OUT/press_bundle.data" "$OUT/qedos_press_pd.elf"
+  [ "${QEDOS_PRESS_PQ:-0}" = 1 ] && llvm-objcopy --update-section .press_bundle="$OUT/press_bundle.data" "$OUT/press_pq_pd.elf"
+fi
+
+# Inject the ML-KEM-768 decapsulation private key into `press_pq_pd.elf` `.pq_keystore` section
+# ONLY (QEDOS_PRESS_PQ=1). The matching public key is a normal signed static asset
+# (examples/press-site-pq/pqkey.bin, produced by tools/pq-dump-pubkey.c above) -- NOT injected
+# here, it rides the same Ed25519-signed bundle as every other press-site-pq file.
+if [ "${QEDOS_PRESS_PQ:-0}" = 1 ]; then
+  PQ_KEY_PEM="${QEDOS_PQ_PRIVATE_KEY:-$R/config/dev/pq-priv.pem}"
+  python3 - "$PQ_KEY_PEM" "$OUT/pq_keystore.data" <<'PY'
+import sys
+data = open(sys.argv[1], "rb").read()
+assert len(data) < 4096, "ML-KEM-768 private key PEM exceeds press_pq_pd .pq_keystore (4096 B)"
+open(sys.argv[2], "wb").write(data.ljust(4096, b"\x00"))
+PY
+  llvm-objcopy --update-section .pq_keystore="$OUT/pq_keystore.data" "$OUT/press_pq_pd.elf"
 fi
 
 # Inject TLS cert/key into `tls_pd.elf` `.tls_keystore` section ONLY (LAW_008).

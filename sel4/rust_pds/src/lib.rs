@@ -877,3 +877,46 @@ pub unsafe extern "C" fn pg_rust_format_press_response(
     push(body);
     if ok { pos } else { 0 }
 }
+
+/// Frame a QEDOS Press PQ-wrap result (POST /press/pq-fetch). The outer HTTP status is always 200
+/// (this PD's job is only to deliver the AEAD envelope byte-for-byte; the real application status
+/// travels INSIDE the encrypted/authenticated payload, decoded client-side after decryption, not
+/// reflected into any header here). Body wire format: [2 bytes app_status, big-endian][12 bytes
+/// AES-GCM nonce][ciphertext || 16-byte tag]. No caller-supplied string data is ever placed in this
+/// response -- every byte other than the opaque nonce/ciphertext is a fixed constant.
+#[no_mangle]
+pub unsafe extern "C" fn pg_rust_format_pq_response(
+    app_status: u16,
+    keep_alive: u8,
+    nonce_ptr: *const u8,
+    ciphertext_ptr: *const u8,
+    ciphertext_len: usize,
+    out_ptr: *mut u8,
+    out_cap: usize,
+) -> usize {
+    if out_ptr.is_null() || nonce_ptr.is_null() || (ciphertext_len > 0 && ciphertext_ptr.is_null()) {
+        return 0;
+    }
+    let out = core::slice::from_raw_parts_mut(out_ptr, out_cap);
+    let nonce = core::slice::from_raw_parts(nonce_ptr, 12);
+    let ciphertext: &[u8] = if ciphertext_len == 0 { &[] } else { core::slice::from_raw_parts(ciphertext_ptr, ciphertext_len) };
+    let body_len = 2usize + 12usize + ciphertext.len();
+    let mut pos = 0usize;
+    let mut ok = true;
+    let mut push = |s: &[u8]| {
+        if ok && pos + s.len() <= out.len() {
+            out[pos..pos + s.len()].copy_from_slice(s);
+            pos += s.len();
+        } else {
+            ok = false;
+        }
+    };
+    push(b"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; sandbox\r\nContent-Length: ");
+    let mut num = [0u8; 10];
+    push(format_u32_ascii(body_len as u32, &mut num));
+    push(if keep_alive != 0 { b"\r\nConnection: keep-alive\r\n\r\n" } else { b"\r\nConnection: close\r\n\r\n" });
+    push(&[(app_status >> 8) as u8, (app_status & 0xff) as u8]);
+    push(nonce);
+    push(ciphertext);
+    if ok { pos } else { 0 }
+}
