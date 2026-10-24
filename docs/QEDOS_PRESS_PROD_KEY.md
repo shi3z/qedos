@@ -154,6 +154,50 @@ python3 tools/press-sign-offline.py sign \
 #    QEDOS_PRESS_PROD_PUBKEY are set automatically by accept_bundle() at that point.
 ```
 
+## Day-to-day editing on the separate machine: `tools/press-editor-offline.py`
+
+Typing HTML into `tools/press-sign-offline.py sign` by hand every time works, but for repeated
+day-to-day edits the operator may prefer a small local web UI, still on the SAME separate machine
+that holds `prod-seed.hex` -- never on the shared host. `tools/press-editor-offline.py` provides
+exactly that:
+
+```
+python3 tools/press-editor-offline.py --qs PATH/TO/qs --seed prod-seed.hex
+# -> http://127.0.0.1:8901 (loopback only): edit index.html, "Save Draft", preview, then
+#    "Sign & Export" downloads a signed .qpr -- copy that file to the shared host's
+#    config/local/press-inbox/ yourself, same as the manual flow above.
+```
+
+It has the same two safety nets as `tools/press-keygen.sh`: it refuses outright by hostname if
+run on the known shared host (`tsuginosuke`), and it requires the same interactive "type yes"
+confirmation as `tools/press-sign-offline.py` -- asked ONCE at process startup, before the web
+server starts accepting connections, not re-asked per click (a long-running server re-prompting
+per request wouldn't make sense; once a human has confirmed this process is running on the
+separate machine, every "Sign & Export" click reuses that same confirmation by passing
+`--yes-i-am-on-a-separate-machine` to the unchanged `press-sign-offline.py sign` logic it shells
+out to -- it reimplements no cryptography of its own).
+
+**Release-generation numbering**: `press-admin.py`'s host-side check requires every accepted
+generation to be strictly greater than the last one it ever accepted. This editor tracks its own
+local "last used generation" counter (a small file next to the content directory, default
+`press-editor-last-release`) and auto-increments it on every successful sign, so the operator
+never has to remember or type a number. This is *this editor's own* bookkeeping, not the shared
+host's authoritative one -- if the operator runs two separate editor instances (or resets this
+local counter) and produces a generation the host has already seen, the host will simply reject
+it as a replay, the same as any other duplicate/old generation. That is a usability edge case, not
+a security gap: the host-side check is still what actually decides what's acceptable.
+
+Verified (`tests/test_press_editor_offline.py`, 5/5, EDITOR_001-005): the real, unoverridden
+hostname refusal actually fires on `tsuginosuke` (tested without any override); edit/save/preview
+round-trips exactly; the exported bundle verifies against the correct test key and is correctly
+rejected against a different one; the auto-incrementing generation number never regresses across
+repeated signs; and the exported bundle is accepted by `tools/press-admin.py`'s own
+`verify_bundle_signature`/`check_and_bump_generation` logic end to end (proving the two tools
+interoperate on the same generation scheme, not just that each is self-consistent). All testing
+used a throwaway keypair generated via `tools/press-sign-offline.py keygen` in a scratch
+directory, created and destroyed only in `/tmp`; no key byte, test or real, appears in the test
+file, its output, or this document.
+
 ## Verification performed (all independently re-run, not just claimed)
 
 - `scripts/build-sel4.sh` fail-closed cases (PROD_001/002/003): unset / malformed / dev-key
