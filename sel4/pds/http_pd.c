@@ -57,6 +57,15 @@ extern size_t pg_rust_format_local_response(
     size_t out_cap
 );
 
+/* Fixed 301 to /press/index.html, used only for the exact root path "/" -- see policy_pd.c. The
+ * Location is a compile-time constant in the Rust formatter, never caller-supplied, so there is no
+ * header-injection surface. */
+extern size_t pg_rust_format_root_redirect_response(
+    uint8_t keep_alive,
+    uint8_t *out_ptr,
+    size_t out_cap
+);
+
 static pg_shm_tls_http_t    *shm_tls_http    = (pg_shm_tls_http_t *)VADDR_SHM_TLS_HTTP;
 static pg_shm_http_policy_t *shm_http_policy = (pg_shm_http_policy_t *)VADDR_SHM_HTTP_POLICY;
 static pg_shm_conn_http_t   *shm_conn_http   = (pg_shm_conn_http_t *)VADDR_SHM_CONN_HTTP;
@@ -299,7 +308,9 @@ static void check_policy_completion(void)
         uint16_t status = shm_http_policy->reject_status;
         uint8_t resp[256];
         uint8_t close_conn = (status == 400 || status == 413 || status == 414 || status == 431 || !ka) ? 1 : 0;
-        size_t rlen = pg_rust_format_local_response(status, 0, is_head, close_conn ? 0 : 1, resp, sizeof(resp));
+        size_t rlen = (status == 301)
+            ? pg_rust_format_root_redirect_response(close_conn ? 0 : 1, resp, sizeof(resp))
+            : pg_rust_format_local_response(status, 0, is_head, close_conn ? 0 : 1, resp, sizeof(resp));
         slot_state[s].awaiting_backend = 0;
         send_resp_to_tls(s, resp, rlen, close_conn);
     }

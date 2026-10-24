@@ -10,6 +10,7 @@ QEDOS Press end-to-end tests on seL4 + Microkit in QEMU (`build/sel4-press/loade
   PRESS_005  POST /press/index.html -> 405 (write methods rejected, never silently served)
   PRESS_006  HEAD /press/index.html -> 200, empty body, correct Content-Length
   PRESS_007  existing proxy health check still works unaffected (/health -> 200)
+  PRESS_008  GET / -> 301 redirect to /press/index.html
 """
 import os, subprocess, sys, time
 
@@ -102,6 +103,11 @@ def main():
         out = get("/health")
         assert "HTTP/1.1 200" in out, out
         ok("PRESS_007", "existing /health proxy check still answers 200 (press dispatch is additive)")
+
+        out = get("/")
+        assert "HTTP/1.1 301 Moved Permanently" in out, out
+        assert "Location: /press/index.html" in out, out
+        ok("PRESS_008", "GET / -> 301 Location: /press/index.html (fixed, not reflecting any request data)")
     finally:
         qemu.terminate()
         try:
@@ -109,7 +115,7 @@ def main():
         except subprocess.TimeoutExpired:
             qemu.kill()
 
-    print(f"\n{len(passed)}/7 PRESS tests passed: {', '.join(passed)}")
+    print(f"\n{len(passed)}/8 PRESS tests passed: {', '.join(passed)}")
 
 
 if __name__ == "__main__":

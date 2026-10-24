@@ -633,6 +633,7 @@ pub fn reason_phrase(status: u16) -> &'static str {
     match status {
         200 => "OK",
         204 => "No Content",
+        301 => "Moved Permanently",
         400 => "Bad Request",
         403 => "Forbidden",
         404 => "Not Found",

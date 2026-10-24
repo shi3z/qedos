@@ -776,6 +776,34 @@ pub unsafe extern "C" fn pg_rust_format_script_response(
     if ok { pos } else { 0 }
 }
 
+/// A fixed, hardcoded 301 redirect to `/press/index.html`, used only for the exact root path `/`.
+/// No caller-supplied target or Location ever reaches this function -- the destination is a
+/// compile-time constant, so there is no header-injection surface here at all.
+#[no_mangle]
+pub unsafe extern "C" fn pg_rust_format_root_redirect_response(
+    keep_alive: u8,
+    out_ptr: *mut u8,
+    out_cap: usize,
+) -> usize {
+    if out_ptr.is_null() {
+        return 0;
+    }
+    let out = core::slice::from_raw_parts_mut(out_ptr, out_cap);
+    let mut pos = 0usize;
+    let mut ok = true;
+    let mut push = |s: &[u8]| {
+        if ok && pos + s.len() <= out.len() {
+            out[pos..pos + s.len()].copy_from_slice(s);
+            pos += s.len();
+        } else {
+            ok = false;
+        }
+    };
+    push(b"HTTP/1.1 301 Moved Permanently\r\nLocation: /press/index.html\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n");
+    push(if keep_alive != 0 { b"Connection: keep-alive\r\n\r\n" } else { b"Connection: close\r\n\r\n" });
+    if ok { pos } else { 0 }
+}
+
 // ============================================================================
 // 6. QEDOS Press glue used by policy_pd / http_pd (only the route-prefix check and response
 //    formatter; the signed-bundle verifier and lookup live in sel4/rust_press, linked ONLY into

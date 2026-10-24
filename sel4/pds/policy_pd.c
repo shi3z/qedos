@@ -154,6 +154,21 @@ void notified(microkit_channel ch)
 #endif
 
 #ifdef QEDOS_PRESS
+    /* Root path "/" has no route of its own; redirect it to the one QEDOS Press publishes. The
+     * destination is the fixed, compile-time constant in pg_rust_format_root_redirect_response --
+     * no caller-supplied data is ever reflected into the Location header. */
+    if (shm_policy_conn->config_verified &&
+        shm_http_policy->target_len == 1 && shm_http_policy->target[0] == '/') {
+        shm_http_policy->decision = PG_DECISION_REJECT;
+        shm_http_policy->backend_id = 0;
+        shm_http_policy->reject_status = 301;
+        PG_FENCE();
+        shm_http_policy->ack_seq = rseq;
+        PG_FENCE();
+        microkit_notify(CH_POLICY_HTTP);
+        return;
+    }
+
     /* QEDOS Press dispatch: any method on a /press path goes to qedos_press_pd, which answers 200/404/405
      * itself (GET/HEAD against a known path => 200; known path, other method => 405; unknown => 404).
      * Only when the signed config was verified (fail closed), same gate as the QED Script branch. */
