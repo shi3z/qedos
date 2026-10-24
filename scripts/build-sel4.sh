@@ -22,6 +22,13 @@ case "$ARCH" in
     [ "${QEDOS_SCRIPT:-0}" = 1 ] && OUT="$R/build/sel4-script"   # never clobber the baseline image
     [ "${QEDOS_PRESS:-0}" = 1 ] && OUT="$R/build/sel4-press"
     [ "${QEDOS_SCRIPT:-0}" = 1 ] && [ "${QEDOS_PRESS:-0}" = 1 ] && OUT="$R/build/sel4-script-press"
+    # QEDOS_PRESS_COMPAT=1 implies QEDOS_PRESS=1 (it only ever replaces tls_pd in a press image)
+    # and gets its own output directory -- it never overwrites build/sel4-press (the full-assurance,
+    # PQ-only image stays separately buildable and testable; see docs/QEDOS_PRESS_TLS_COMPAT.md).
+    if [ "${QEDOS_PRESS_COMPAT:-0}" = 1 ]; then
+      export QEDOS_PRESS=1   # must be exported: sel4/meta_proofgate.py reads it as a subprocess
+      OUT="$R/build/sel4-press-compat"
+    fi
     [ -n "${QEDOS_OUT:-}" ] && OUT="$QEDOS_OUT"                  # explicit override (e.g. rebuild-from-source checks)
     ;;
   aarch64)
@@ -78,12 +85,21 @@ ld.lld -L"$BOARD_DIR/lib" --start-group \
   "$OUT/tcp_pd.o" "$OUT/libsddf_util.a" "$OUT/libsddf_util_debug.a" "$OUT/lib_sddf_lwip_echo.a" \
   -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/tcp_pd.elf"
 
-# 6. Compile & link `tls_pd.elf` (Freestanding OpenSSL 3.6.1, TLS 1.3 + X25519MLKEM768 only)
+# 6. Compile & link `tls_pd.elf` (Freestanding OpenSSL 3.6.1, TLS 1.3 + X25519MLKEM768 only) --
+#    or, under QEDOS_PRESS_COMPAT=1, the separate, narrower-assurance `tls_compat_pd.elf`
+#    instead (PQ preferred, classical fallback -- see docs/QEDOS_PRESS_TLS_COMPAT.md). An image
+#    links exactly one of the two, never both.
+TLS_PD_SRC="$R/sel4/pds/tls_pd.c"
+TLS_PD_NAME="tls_pd"
+if [ "${QEDOS_PRESS_COMPAT:-0}" = 1 ]; then
+  TLS_PD_SRC="$R/sel4/pds/tls_compat_pd.c"
+  TLS_PD_NAME="tls_compat_pd"
+fi
 clang $COMMON_CFLAGS -I"$R/sel4/libc_shim" -I"$R/sel4/libc_shim/include" -I"$OPENSSL_SEL4/include" \
-  -c "$R/sel4/pds/tls_pd.c" -o "$OUT/tls_pd.o"
+  -c "$TLS_PD_SRC" -o "$OUT/$TLS_PD_NAME.o"
 ld.lld -L"$BOARD_DIR/lib" --start-group \
-  "$OUT/tls_pd.o" "$OUT/libc_shim.o" "$OPENSSL_SEL4/lib/libssl.a" "$OPENSSL_SEL4/lib/libcrypto.a" \
-  -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/tls_pd.elf"
+  "$OUT/$TLS_PD_NAME.o" "$OUT/libc_shim.o" "$OPENSSL_SEL4/lib/libssl.a" "$OPENSSL_SEL4/lib/libcrypto.a" \
+  -lmicrokit -Tmicrokit.ld --end-group -o "$OUT/$TLS_PD_NAME.elf"
 
 # 7. Compile & link `http_pd.elf`, `policy_pd.elf`, `connector_pd.elf` (Rust `#![no_std]` crates)
 for pd in http_pd policy_pd connector_pd; do
@@ -212,7 +228,7 @@ key = open(sys.argv[2], "rb").read()
 assert len(cert) < 6144 and len(key) < 2048
 open(sys.argv[3], "wb").write(cert.ljust(6144, b"\x00") + key.ljust(2048, b"\x00"))
 PY
-llvm-objcopy --update-section .tls_keystore="$OUT/tls_keystore.data" "$OUT/tls_pd.elf"
+llvm-objcopy --update-section .tls_keystore="$OUT/tls_keystore.data" "$OUT/$TLS_PD_NAME.elf"
 
 # 9. Build the bootable seL4 Microkit image (`loader.img`), memory report (`report.txt`),
 #    and formal Viper capability invariants (`build/sel4/viper/*.vpr`)

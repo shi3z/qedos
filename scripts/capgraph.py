@@ -285,6 +285,17 @@ def load_policy(image_pds=None):
                 e = pol["pds"][pd]
                 e["signal"] = sorted(set(e.get("signal", [])) | set(add.get("signal", [])))
                 e["maps"] = {**e.get("maps", {}), **add.get("maps", {})}
+    # QEDOS_PRESS_COMPAT=1 images link tls_compat_pd in place of tls_pd (same priority, channels,
+    # and maps -- see sel4/meta_proofgate.py and docs/QEDOS_PRESS_TLS_COMPAT.md). tls_pd and
+    # tls_compat_pd are never both present in one image, so this is a rename, not an addition:
+    # every policy reference to "tls_pd" (its own entry, and every other PD's signal list) becomes
+    # "tls_compat_pd" for exactly this image, instead of hand-duplicating a second near-identical
+    # JSON block that could silently drift out of sync with tls_pd's.
+    if image_pds is not None and "tls_compat_pd" in image_pds and "tls_pd" in pol["pds"]:
+        pol["pds"]["tls_compat_pd"] = pol["pds"].pop("tls_pd")
+        for e in pol["pds"].values():
+            if "tls_pd" in e.get("signal", []):
+                e["signal"] = sorted(set(e["signal"]) - {"tls_pd"} | {"tls_compat_pd"})
     return pol
 
 

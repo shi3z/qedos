@@ -1,5 +1,5 @@
 {
- "_comment": "Intended authority per PD. Reviewed by hand against docs/ARCHITECTURE.md and docs/SECURITY_BOUNDARIES.md; scripts/capgraph.py fails the audit if the generated image differs in either direction. Any change here is a security-relevant change and needs review.",
+ "_comment": "Intended authority per PD. Reviewed by hand against docs/ARCHITECTURE.md and docs/SECURITY_BOUNDARIES.md; scripts/capgraph.py fails the audit if the generated image differs in either direction. Any change here is a security-relevant change and needs review. Note: a QEDOS_PRESS_COMPAT=1 image links tls_compat_pd in place of tls_pd (same priority/channels/maps); scripts/capgraph.py's load_policy() renames the 'tls_pd' entry below (and every reference to it) to 'tls_compat_pd' for that one image, rather than duplicating this block -- see docs/QEDOS_PRESS_TLS_COMPAT.md.",
  "secrets": {
   "regions": [
    "tls_keystore",

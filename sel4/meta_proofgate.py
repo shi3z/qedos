@@ -100,8 +100,14 @@ def main() -> None:
     tcp_net_copier = ProtectionDomain(
         "tcp_net_copier", "network_copy0.elf", priority=98, budget=20000, cpu=0
     )
+    # QEDOS_PRESS_COMPAT=1 swaps the full-assurance, PQ-only tls_pd for the separate, narrower-
+    # assurance tls_compat_pd (PQ preferred, classical fallback) in THIS image only -- every other
+    # image still builds tls_pd unchanged. Same priority/budget/stack/channels/maps either way; only
+    # the PD name and ELF differ. See docs/QEDOS_PRESS_TLS_COMPAT.md.
+    press_compat_on = os.environ.get("QEDOS_PRESS_COMPAT") == "1"
+    tls_pd_name = "tls_compat_pd" if press_compat_on else "tls_pd"
     tls_pd = ProtectionDomain(
-        "tls_pd", "tls_pd.elf", priority=96, budget=20000, stack_size=0x40000, cpu=0
+        tls_pd_name, f"{tls_pd_name}.elf", priority=96, budget=20000, stack_size=0x40000, cpu=0
     )
     http_pd = ProtectionDomain(
         "http_pd", "http_pd.elf", priority=95, budget=20000, stack_size=0x40000, cpu=0
